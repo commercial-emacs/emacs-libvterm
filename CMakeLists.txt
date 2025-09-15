@@ -24,70 +24,38 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Build type (default RelWithDebInfo)" FORCE)
 endif()
 
-# Look for the header file.
-option(USE_SYSTEM_LIBVTERM "Use system libvterm instead of the vendored version." ON)
+# try to find the vterm.h header file.
+find_path(LIBVTERM_INCLUDE_DIR NAMES
+  vterm.h
+  )
 
-# Try to find the libvterm in system.
-if (USE_SYSTEM_LIBVTERM)
-  # try to find the vterm.h header file.
-  find_path(LIBVTERM_INCLUDE_DIR
-    NAMES vterm.h
-    )
-
-  # vterm.h is found.
-  if (LIBVTERM_INCLUDE_DIR)
-    message(STATUS "System libvterm detected")
-    execute_process(COMMAND  grep -c "VTermStringFragment" "${LIBVTERM_INCLUDE_DIR}/vterm.h" OUTPUT_VARIABLE VTermStringFragmentExists)
-    if (${VTermStringFragmentExists} EQUAL "0")
-#    add_compile_definitions(VTermStringFragmentNotExists)
-    add_definitions(-DVTermStringFragmentNotExists)
-    endif()
-    execute_process(COMMAND  grep -c "VTermSelectionMask" "${LIBVTERM_INCLUDE_DIR}/vterm.h" OUTPUT_VARIABLE VTermSelectionMaskExists)
-    if (${VTermSelectionMaskExists} EQUAL "0")
-#    add_compile_definitions(VTermStringFragmentNotExists)
-    add_definitions(-DVTermSelectionMaskNotExists)
-    endif()
-    execute_process(COMMAND  grep -c "sb_clear" "${LIBVTERM_INCLUDE_DIR}/vterm.h" OUTPUT_VARIABLE VTermSBClearExists)
-    if (${VTermSBClearExists} EQUAL "0")
-      add_definitions(-DVTermSBClearNotExists)
-    endif()
-  else()
-    message(STATUS "System libvterm not found: libvterm will be downloaded and compiled as part of the build process")
-  endif()
+if(NOT LIBVTERM_INCLUDE_DIR)
+  message(FATAL_ERROR "libvterm header not found")
 endif()
 
-if (LIBVTERM_INCLUDE_DIR)
-  find_library(LIBVTERM_LIBRARY NAMES
-    vterm
-    libvterm
-    )
+find_library(LIBVTERM_LIBRARY NAMES
+  vterm
+  libvterm
+  )
 
-  if(NOT LIBVTERM_LIBRARY)
-    message(FATAL_ERROR "libvterm not found")
-  endif()
-else()
-  find_program(LIBTOOL NAMES libtool glibtool)
-  if(NOT LIBTOOL)
-    message(FATAL_ERROR "libtool not found. Please install libtool")
-  endif()
+if(NOT LIBVTERM_LIBRARY)
+  message(FATAL_ERROR "libvterm not found")
+endif()
 
-  ExternalProject_add(libvterm
-    GIT_REPOSITORY https://github.com/Sbozzolo/libvterm-mirror.git
-    GIT_TAG 64f1775952dbe001e989f2ab679563b54f2fca55
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ${LIBVTERM_BUILD_COMMAND} "CFLAGS='-fPIC'" "LDFLAGS='-static'"
-    BUILD_IN_SOURCE ON
-    INSTALL_COMMAND "")
-
-  ExternalProject_Get_property(libvterm SOURCE_DIR)
-
-  set(LIBVTERM_INCLUDE_DIR ${SOURCE_DIR}/include)
-  set(LIBVTERM_LIBRARY ${SOURCE_DIR}/.libs/libvterm.a)
-
-  add_dependencies(vterm-module libvterm)
-
-  # Workaround for https://gitlab.kitware.com/cmake/cmake/issues/15052
-  file(MAKE_DIRECTORY ${LIBVTERM_INCLUDE_DIR})
+message(STATUS "System libvterm detected")
+execute_process(COMMAND grep -c "VTermStringFragment" "${LIBVTERM_INCLUDE_DIR}/vterm.h" OUTPUT_VARIABLE VTermStringFragmentExists)
+if (${VTermStringFragmentExists} EQUAL "0")
+  add_compile_definitions(VTermStringFragmentNotExists)
+  add_definitions(-DVTermStringFragmentNotExists)
+endif()
+execute_process(COMMAND grep -c "VTermSelectionMask" "${LIBVTERM_INCLUDE_DIR}/vterm.h" OUTPUT_VARIABLE VTermSelectionMaskExists)
+if (${VTermSelectionMaskExists} EQUAL "0")
+  add_compile_definitions(VTermStringFragmentNotExists)
+  add_definitions(-DVTermSelectionMaskNotExists)
+endif()
+execute_process(COMMAND grep -c "sb_clear" "${LIBVTERM_INCLUDE_DIR}/vterm.h" OUTPUT_VARIABLE VTermSBClearExists)
+if (${VTermSBClearExists} EQUAL "0")
+  add_definitions(-DVTermSBClearNotExists)
 endif()
 
 add_library(vterm STATIC IMPORTED)

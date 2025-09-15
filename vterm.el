@@ -3,7 +3,7 @@
 ;; Copyright (C) 2017-2020 by Lukas Fürmetz & Contributors
 ;;
 ;; Author: Lukas Fürmetz <fuermetz@mailbox.org>
-;; Version: 0.0.2
+;; Version: 0.0.3
 ;; URL: https://github.com/akermu/emacs-libvterm
 ;; Keywords: terminals
 ;; Package-Requires: ((emacs "25.1"))
@@ -24,38 +24,6 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
-
-;;; Commentary:
-;;
-;; Emacs-libvterm (vterm) is fully-fledged terminal emulator based on an
-;; external library (libvterm) loaded as a dynamic module.  As a result of using
-;; compiled code (instead of elisp), emacs-libvterm is fully capable, fast, and
-;; it can seamlessly handle large outputs.
-
-;;; Installation
-
-;; Emacs-libvterm requires support for loading modules.  You can check if your
-;; Emacs supports modules by inspecting the variable module-file-suffix.  If it
-;; nil, than, you need to recompile Emacs or obtain a copy of Emacs with this
-;; option enabled.
-
-;; Emacs-libvterm requires CMake and libvterm.  If libvterm is not available,
-;; emacs-libvterm will downloaded and compiled.  In this case, libtool is
-;; needed.
-
-;; The reccomended way to install emacs-libvterm is from MELPA.
-
-;;; Usage
-
-;; To open a terminal, simply use the command M-x vterm.
-
-;;; Tips and tricks
-
-;; Adding some shell-side configuration enables a large set of additional
-;; features, including, directory tracking, prompt recognition, message passing.
-
-;;; Code:
-
 (require 'term/xterm)
 
 (unless module-file-suffix
@@ -65,21 +33,6 @@
 (defvar vterm-copy-mode)
 
 ;;; Compilation of the module
-
-(defcustom vterm-module-cmake-args ""
-  "Arguments given to CMake to compile vterm-module.
-
-Currently, vterm defines the following flags (in addition to the
-ones already available in CMake):
-
-`USE_SYSTEM_LIBVTERM'.  Set it to `Off' to use the vendored version of
-libvterm instead of the one installed on your system.
-
-This string is given verbatim to CMake, so it has to have the
-correct syntax.  An example of meaningful value for this variable
-is `-DUSE_SYSTEM_LIBVTERM=Off'."
-  :type 'string
-  :group 'vterm)
 
 (defcustom vterm-always-compile-module nil
   "If not nil, if `vterm-module' is not found, compile it without asking.
@@ -96,50 +49,9 @@ confirmation before compiling."
   "Return t if cmake is available.
 CMake is needed to build vterm, here we check that we can find
 the executable."
-
   (unless (executable-find "cmake")
     (error "Vterm needs CMake to be compiled.  Please, install CMake"))
   t)
-
-;;;###autoload
-(defun vterm-module-compile ()
-  "Compile vterm-module."
-  (interactive)
-  (when (vterm-module--cmake-is-available)
-    (let* ((vterm-directory
-            (shell-quote-argument
-             ;; NOTE: This is a workaround to fix an issue with how the Emacs
-             ;; feature/native-comp branch changes the result of
-             ;; `(locate-library "vterm")'. See emacs-devel thread
-             ;; https://lists.gnu.org/archive/html/emacs-devel/2020-07/msg00306.html
-             ;; for a discussion.
-             (file-name-directory (locate-library "vterm.el" t))))
-           (make-commands
-            (concat
-             "cd " vterm-directory "; \
-             mkdir -p build; \
-             cd build; \
-             cmake -G 'Unix Makefiles' "
-             vterm-module-cmake-args
-             " ..; \
-             make; \
-             cd -"))
-           (buffer (get-buffer-create vterm-install-buffer-name)))
-      (pop-to-buffer buffer)
-      (compilation-mode)
-      (if (zerop (let ((inhibit-read-only t))
-                   (call-process "sh" nil buffer t "-c" make-commands)))
-          (message "Compilation of `emacs-libvterm' module succeeded")
-        (error "Compilation of `emacs-libvterm' module failed!")))))
-
-;; If the vterm-module is not compiled yet, compile it
-(unless (require 'vterm-module nil t)
-  (if (or vterm-always-compile-module
-          (y-or-n-p "Vterm needs `vterm-module' to work.  Compile it now? "))
-      (progn
-        (vterm-module-compile)
-        (require 'vterm-module))
-    (error "Vterm will not work until `vterm-module' is compiled!")))
 
 ;;; Dependencies
 
@@ -1903,16 +1815,14 @@ Effectively toggle between the two positions."
 (defun vterm--reinsert-fake-newlines ()
   "Reinsert fake newline from `vterm--copy-mode-fake-newlines'."
   (let ((inhibit-read-only t)
-        (inhibit-redisplay t)
-        (fake-newline-text "\n")
-        fake-newline-pos)
-    (add-text-properties 0 1 '(vterm-line-wrap t rear-nonsticky t)
-                         fake-newline-text)
+        (inhibit-redisplay t))
     (while vterm--copy-mode-fake-newlines
-      (setq fake-newline-pos (car vterm--copy-mode-fake-newlines))
+      (goto-char (car vterm--copy-mode-fake-newlines))
       (setq vterm--copy-mode-fake-newlines (cdr vterm--copy-mode-fake-newlines))
-      (goto-char fake-newline-pos)
-      (insert fake-newline-text))))
+      (save-excursion
+        (insert "\n"))
+      (add-text-properties (point) (1+ (point))
+                           '(vterm-line-wrap t rear-nonsticky t)))))
 
 (defun vterm--remove-fake-newlines (&optional remembering-pos-p)
   "Filter out injected newlines were injected when rendering the terminal.

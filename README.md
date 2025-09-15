@@ -2,107 +2,13 @@
 
 # Introduction
 
-Emacs-libvterm (_vterm_) is fully-fledged terminal emulator inside GNU Emacs
-based on [libvterm](https://github.com/neovim/libvterm), a C library. As a
-result of using compiled code (instead of elisp), emacs-libvterm is fully
-capable, fast, and it can seamlessly handle large outputs.
-
-## Warning
-
-This package is in active development and, while being stable enough to be used
-as a daily-driver, it is currently in **alpha** stage. This means that
-occasionally the public interface will change (for example names of options or
-functions). A list of recent breaking changes is in
-[appendix](#breaking-changes). Moreover, emacs-libvterm deals directly with some
-low-level operations, hence, bugs can lead to segmentation faults and crashes.
-If that happens, please [report the
-problem](https://github.com/akermu/emacs-libvterm/issues/new).
-
-## Given that eshell, shell, and (ansi-)term are Emacs built-in, why should I use vterm?
-
-The short answer is: unparalleled performance and compatibility with standard
-command-line tools.
-
-For the long answer, let us discuss the differences between `eshell`, `shell`,
-`term` and `vterm`:
-- `eshell`: it is a shell completely implemented in Emacs Lisp. It is
-  well-integrated in Emacs and it runs on Windows. It does not support command line
-  tools that require terminal manipulation capabilities (e.g., `ncdu`, `nmtui`,
-  ...).
-- `shell`: it interfaces with a standard shell (e.g., `bash`). It reads an input
-  from Emacs, sends it to the shell, and reports back the output from the shell.
-  As such, like `eshell`, it does not support interactive commands, especially
-  those that directly handle how the output should be displayed (e.g., `htop`).
-- `term`: it is a terminal emulator written in elisp. `term` runs a shell
-  (similarly to other terminal emulators like Gnome Terminal) and programs can
-  directly manipulate the output using escape codes. Hence, many interactive
-  applications (like the one aforementioned) work with `term`. However, `term`
-  and `ansi-term` do not implement all the escapes codes needed, so some
-  programs do not work properly. Moreover, `term` has inferior performance
-  compared to standalone terminals, especially with large bursts of output.
-- `vterm`: like `term` it is a terminal emulator. Unlike `term`, the core of
-  `vterm` is an external library written in C, `libvterm`. For this reason,
-  `vterm` outperforms `term` and has a nearly universal compatibility with
-  terminal applications.
-
-Vterm is not for you [if you are using Windows](https://github.com/akermu/emacs-libvterm/issues/12), or if you cannot set up Emacs
-with support for modules. Otherwise, you should try vterm, as it provides a
-superior terminal experience in Emacs.
-
-Using `vterm` is like using Gnome Terminal inside Emacs: Vterm is fully-featured
-and fast, but is not as well integrated in Emacs as `eshell` (yet), so some of
-the editing keybinding you are used to using may not work. For example,
-`evil-mode` is currently not supported (though, users can enable VI emulation in
-their shells). This is because keys are sent directly to the shell. We are
-constantly working to improve this.
+A [libvterm](https://github.com/neovim/libvterm) integration for GNU Emacs.
+Not Windows compatible.
 
 # Installation
 
-## Requirements
-
-Before installing emacs-libvterm, you need to make sure you have installed
- 1. GNU Emacs (>= 25.1) with [module
-    support](https://www.gnu.org/software/emacs/manual/html_node/elisp/Dynamic-Modules.html).
-    You can check that, by verifying that `module-file-suffix` is not `nil`.
- 2. cmake (>= 3.11)
- 3. libtool-bin (related issues:
-    [#66](https://github.com/akermu/emacs-libvterm/issues/66)
-    [#85](https://github.com/akermu/emacs-libvterm/issues/85#issuecomment-491845136))
- 4. OPTIONAL: [libvterm](https://github.com/Sbozzolo/libvterm-mirror.git) (>= 0.2). This
-    library can be found in the official repositories of most distributions
-    (e.g., Arch, Debian, Fedora, Gentoo, openSUSE, Ubuntu). Typical names are
-    `libvterm` (Arch, Fedora, Gentoo, openSUSE), or `libvterm-dev` (Debian,
-    Ubuntu). If not available, `libvterm` will be downloaded during the
-    compilation process. Some distributions (e.g. Ubuntu < 20.04, Debian < 11)
-    have versions of `libvterm` that are too old. If you find compilation errors
-    related to `VTERM_COLOR`, you should not use your system libvterm. See
-    [FAQ](#frequently-asked-questions-and-problems) for more details.
-
-## From MELPA
-
-`vterm` is available on [MELPA](https://melpa.org/), and it can be installed as
-a normal package. If the requirements are satisfied (mainly, Emacs was built
-with support for modules), `vterm` will compile the module the first time it is
-run. This is the recommended way to install `vterm`.
-
-`vterm` can be install from MELPA with `use-package` by adding the following
-lines to your `init.el`:
-
-```elisp
-(use-package vterm
-    :ensure t)
-```
-
-To take full advantage of the capabilities of `vterm`, you should configure your
-shell too. Read about this in the section [shell-side
-configuration](#shell-side-configuration).
-
-## Manual installation
-
-Clone the repository:
-
 ```sh
-git clone https://github.com/akermu/emacs-libvterm.git
+git clone https://github.com/dickmao/emacs-libvterm.git
 ```
 
 By default, vterm will try to find if libvterm is installed. If it is not found,
