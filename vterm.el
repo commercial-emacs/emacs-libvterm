@@ -8,7 +8,6 @@
 ;; Keywords: terminals
 ;; Package-Requires: ((emacs "25.1"))
 
-
 ;; This file is not part of GNU Emacs.
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -25,48 +24,6 @@
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 (require 'term/xterm)
-
-(unless module-file-suffix
-  (error "VTerm needs module support.  Please compile Emacs with
-  the --with-modules option!"))
-
-(defvar vterm-copy-mode)
-
-;;; Compilation of the module
-
-(defcustom vterm-always-compile-module nil
-  "If not nil, if `vterm-module' is not found, compile it without asking.
-
-When `vterm-always-compile-module' is nil, vterm will ask for
-confirmation before compiling."
-  :type  'boolean
-  :group 'vterm)
-
-(defvar vterm-install-buffer-name " *Install vterm* "
-  "Name of the buffer used for compiling vterm-module.")
-
-(defun vterm-module--cmake-is-available ()
-  "Return t if cmake is available.
-CMake is needed to build vterm, here we check that we can find
-the executable."
-  (unless (executable-find "cmake")
-    (error "Vterm needs CMake to be compiled.  Please, install CMake"))
-  t)
-
-;;; Dependencies
-
-;; Generate this list with:
-;; awk -F\" '/bind_function*/ {print "(declare-function", $2, "\"vterm-module\")"}' vterm-module.c
-(declare-function vterm--new "vterm-module")
-(declare-function vterm--update "vterm-module")
-(declare-function vterm--redraw "vterm-module")
-(declare-function vterm--write-input "vterm-module")
-(declare-function vterm--set-size "vterm-module")
-(declare-function vterm--set-pty-name "vterm-module")
-(declare-function vterm--get-pwd-raw "vterm-module")
-(declare-function vterm--reset-point "vterm-module")
-(declare-function vterm--get-icrnl "vterm-module")
-
 (require 'subr-x)
 (require 'find-func)
 (require 'cl-lib)
@@ -76,8 +33,22 @@ the executable."
 (require 'face-remap)
 (require 'tramp)
 (require 'bookmark)
+(condition-case err
+    (require 'vterm-module)
+  (error (when (or (not module-file-suffix)
+                   (not (member module-file-suffix load-suffixes)))
+           (user-error "Emacs requires compilation switch --with-modules"))
+         (signal (car err) (cdr err))))
 
-;;; Options
+(declare-function vterm--reset-point "vterm-module")
+(declare-function vterm--get-pwd-raw "vterm-module")
+(declare-function vterm--set-size "vterm-module")
+(declare-function vterm--write-input "vterm-module")
+(declare-function vterm--redraw "vterm-module")
+(declare-function vterm--get-icrnl "vterm-module")
+(declare-function vterm--update "vterm-module")
+(declare-function vterm--set-pty-name "vterm-module")
+(declare-function vterm--new "vterm-module")
 
 (defcustom vterm-shell shell-file-name
   "The shell that gets run in the vterm."
@@ -86,45 +57,21 @@ the executable."
 
 (defcustom vterm-tramp-shells
   '(("ssh" login-shell) ("scp" login-shell) ("docker" "/bin/sh"))
-  "The shell that gets run in the vterm for tramp.
+  "List of tuples of the form (TRAMP-METHOD SHELL [FALLBACK-SHELL]).
 
-`vterm-tramp-shells' has to be a list of pairs of the format:
-\(TRAMP-METHOD SHELL)
-
-Use t as TRAMP-METHOD to specify a default shell for all methods.
-Specific methods always take precedence over t.
-
-Set SHELL to \\='login-shell to use the user's login shell on the host.
-The login-shell detection currently works for POSIX-compliant remote
-hosts that have the getent command (regular GNU/Linux distros, *BSDs,
-but not MacOS X unfortunately).
-
-You can specify an additional second SHELL command as a fallback
-that is used when the login-shell detection fails, e.g.,
-\\='((\"ssh\" login-shell \"/bin/bash\") ...)
-If no second SHELL command is specified with \\='login-shell, vterm will
-fall back to tramp's shell."
+A tuple \\='(\"ssh\" login-shell \"/bin/bash\") defers to the login
+shell of the remote host, determined by the getent command, which
+is not present on macos.  The default fallback shell is tramp's shell."
   :type '(alist :key-type string :value-type string)
   :group 'vterm)
 
 (defcustom vterm-buffer-name "*vterm*"
-  "The basename used for vterm buffers.
-This is the default name used when running `vterm' or
-`vterm-other-window'.
-
-With a numeric prefix argument to `vterm', the buffer name will
-be the value of this variable followed by the number.  For
-example, with the numeric prefix argument 2, the buffer would be
-named \"*vterm*<2>\"."
+  "Generally suffixed by an instantiation ordinal \"*vterm*<2>\"."
   :type 'string
   :group 'vterm)
 
 (defcustom vterm-max-scrollback 1000
-  "Maximum \\='scrollback\\=' value.
-
-The maximum allowed is 100000.  This value can modified by
-changing the SB_MAX variable in vterm-module.h and recompiling
-the module."
+  "The maximum allowed is 100000, set by SB_MAX in vterm-module.h."
   :type 'number
   :group 'vterm)
 
@@ -134,12 +81,7 @@ the module."
   :group 'vterm)
 
 (defcustom vterm-kill-buffer-on-exit t
-  "If not nil vterm buffers are killed when the attached process is terminated.
-
-If `vterm-kill-buffer-on-exit' is set to t, when the process
-associated to a vterm buffer quits, the buffer is killed.  When
-nil, the buffer will still be available as if it were in
-`fundamental-mode'."
+  "Whether the buffer is killed when its vterm process ends."
   :type  'boolean
   :group 'vterm)
 
@@ -348,8 +290,6 @@ copy-mode and set to nil on leaving."
   :type 'boolean
   :group 'vterm)
 
-;;; Faces
-
 (defface vterm-color-black
   `((t :inherit term-color-black))
   "Face used to render black color code."
@@ -458,8 +398,6 @@ Only foreground is used."
 Only background is used."
   :group 'vterm)
 
-;;; Variables
-
 (defvar vterm-color-palette
   [vterm-color-black
    vterm-color-red
@@ -495,6 +433,7 @@ Only background is used."
 (defvar-local vterm--undecoded-bytes nil)
 (defvar-local vterm--copy-mode-fake-newlines nil)
 
+<<<<<<< HEAD
 (define-obsolete-variable-alias 'vterm--redraw-immididately 'vterm--redraw-immediately "2025-07-15")
 
 (defvar vterm-timer-delay 0.1
@@ -538,6 +477,80 @@ of data.  If nil, never delay.  The units are seconds.")
                  append (cl-loop for char from ?a to ?z
                                  for key = (format "%s%c" prefix char)
                                  collect key))))
+||||||| parent of b36b2e9 (checkpoint)
+
+(defvar vterm-timer-delay 0.1
+  "Delay for refreshing the buffer after receiving updates from libvterm.
+
+A larger delary improves performance when receiving large bursts
+of data.  If nil, never delay.  The units are seconds.")
+
+;;; Keybindings
+
+;; We have many functions defined by vterm-define-key.  Later, we will bind some
+;; of the functions.  If the following is not evaluated during compilation, the compiler
+;; will complain that some functions are not defined (eg, vterm-send-C-c)
+(eval-and-compile
+  (defmacro vterm-define-key (key)
+    "Define a command that sends KEY with modifiers C and M to vterm."
+    (declare (indent defun)
+             (doc-string 3))
+    `(progn (defun ,(intern (format "vterm-send-%s" key))()
+              ,(format "Sends %s to the libvterm."  key)
+              (interactive)
+              (vterm-send-key ,(char-to-string (get-byte (1- (length key)) key))
+                              ,(let ((case-fold-search nil))
+                                 (or (string-match-p "[A-Z]$" key)
+                                     (string-match-p "S-" key)))
+                              ,(string-match-p "M-" key)
+                              ,(string-match-p "C-" key)))
+            (make-obsolete ',(intern (format "vterm-send-%s" key))
+                           "use `vterm--self-insert' or `vterm-send' or `vterm-send-key'."
+                           "v0.1")))
+  (make-obsolete 'vterm-define-key "" "v0.1")
+  (mapc (lambda (key)
+          (eval `(vterm-define-key ,key)))
+        (cl-loop for prefix in '("M-")
+                 append (cl-loop for char from ?A to ?Z
+                                 for key = (format "%s%c" prefix char)
+                                 collect key)))
+  (mapc (lambda (key)
+          (eval `(vterm-define-key ,key)))
+        (cl-loop for prefix in '("C-" "M-" "C-S-")
+                 append (cl-loop for char from ?a to ?z
+                                 for key = (format "%s%c" prefix char)
+                                 collect key))))
+=======
+(defmacro vterm-define-key (key)
+  "Define a command that sends KEY with modifiers C and M to vterm."
+  (declare (indent defun)
+           (doc-string 3))
+  `(progn (defun ,(intern (format "vterm-send-%s" key))()
+            ,(format "Sends %s to the libvterm."  key)
+            (interactive)
+            (vterm-send-key ,(char-to-string (get-byte (1- (length key)) key))
+                            ,(let ((case-fold-search nil))
+                               (or (string-match-p "[A-Z]$" key)
+                                   (string-match-p "S-" key)))
+                            ,(string-match-p "M-" key)
+                            ,(string-match-p "C-" key)))
+          (make-obsolete ',(intern (format "vterm-send-%s" key))
+                         "use `vterm--self-insert' or `vterm-send' or `vterm-send-key'."
+                         "v0.1")))
+(make-obsolete 'vterm-define-key "" "v0.1")
+(mapc (lambda (key)
+        (eval `(vterm-define-key ,key)))
+      (cl-loop for prefix in '("M-")
+               append (cl-loop for char from ?A to ?Z
+                               for key = (format "%s%c" prefix char)
+                               collect key)))
+(mapc (lambda (key)
+        (eval `(vterm-define-key ,key)))
+      (cl-loop for prefix in '("C-" "M-" "C-S-")
+               append (cl-loop for char from ?a to ?z
+                               for key = (format "%s%c" prefix char)
+                               collect key)))
+>>>>>>> b36b2e9 (checkpoint)
 
 ;; Function keys and most of C- and M- bindings
 (defun vterm--exclude-keys (map exceptions)
@@ -650,9 +663,6 @@ Exceptions are defined by `vterm-keymap-exceptions'."
     (define-key map (kbd "C-c C-n")        #'vterm-next-prompt)
     (define-key map (kbd "C-c C-p")        #'vterm-previous-prompt)
     map))
-
-
-;;; Mode
 
 (define-derived-mode vterm-mode fundamental-mode "VTerm"
   "Major mode for vterm buffer."
@@ -822,35 +832,6 @@ Notes down the current directory and buffer name."
     (defaults . nil)))
 
 
-;;;###autoload
-(defun vterm--bookmark-handler (bmk)
-  "Handler to restore a vterm bookmark BMK.
-
-If a vterm buffer of the same name does not exist, the function will create a
-new vterm buffer of the name. It also checks the current directory and sets
-it to the bookmarked directory if needed."
-  (let* ((thisdir (bookmark-prop-get bmk 'thisdir))
-         (buf-name (bookmark-prop-get bmk 'buf-name))
-         (buf (get-buffer buf-name))
-         (thismode (and buf (with-current-buffer buf major-mode))))
-    ;; create if no such vterm buffer exists
-    (when (or (not buf) (not (eq thismode 'vterm-mode)))
-      (setq buf (generate-new-buffer buf-name))
-      (with-current-buffer buf
-        (when vterm-bookmark-check-dir
-          (setq default-directory thisdir))
-        (vterm-mode)))
-    ;; check the current directory
-    (with-current-buffer buf
-      (when (and vterm-bookmark-check-dir
-                 (not (string-equal default-directory thisdir)))
-        (when vterm-copy-mode
-          (vterm-copy-mode-done nil))
-        (vterm-insert (concat "cd " thisdir))
-        (vterm-send-return)))
-    ;; set to this vterm buf
-    (set-buffer buf)))
-
 (defun vterm--compilation-setup ()
   "Function to enable the option `compilation-shell-minor-mode' for vterm.
 `'compilation-shell-minor-mode' would change the value of local
@@ -879,8 +860,6 @@ Optional argument RESET clears all the errors."
     (goto-char pt)
     (compilation-next-error-function n reset)))
 
-;;; Copy Mode
-
 (defun vterm--enter-copy-mode ()
   (use-local-map nil)
   (vterm-send-stop)
@@ -888,7 +867,6 @@ Optional argument RESET clears all the errors."
     (save-excursion
       (setq truncate-lines nil)
       (vterm--remove-fake-newlines t))))
-
 
 (defun vterm--exit-copy-mode ()
   (when vterm-copy-mode-remove-fake-newlines
@@ -920,6 +898,35 @@ A conventient way to exit `vterm-copy-mode' is with
         (vterm--exit-copy-mode))
     (user-error "You cannot enable vterm-copy-mode outside vterm buffers")))
 
+;;;###autoload
+(defun vterm--bookmark-handler (bmk)
+  "Handler to restore a vterm bookmark BMK.
+
+If a vterm buffer of the same name does not exist, the function will create a
+new vterm buffer of the name. It also checks the current directory and sets
+it to the bookmarked directory if needed."
+  (let* ((thisdir (bookmark-prop-get bmk 'thisdir))
+         (buf-name (bookmark-prop-get bmk 'buf-name))
+         (buf (get-buffer buf-name))
+         (thismode (and buf (with-current-buffer buf major-mode))))
+    ;; create if no such vterm buffer exists
+    (when (or (not buf) (not (eq thismode 'vterm-mode)))
+      (setq buf (generate-new-buffer buf-name))
+      (with-current-buffer buf
+        (when vterm-bookmark-check-dir
+          (setq default-directory thisdir))
+        (vterm-mode)))
+    ;; check the current directory
+    (with-current-buffer buf
+      (when (and vterm-bookmark-check-dir
+                 (not (string-equal default-directory thisdir)))
+        (when vterm-copy-mode
+          (vterm-copy-mode-done nil))
+        (vterm-insert (concat "cd " thisdir))
+        (vterm-send-return)))
+    ;; set to this vterm buf
+    (set-buffer buf)))
+
 (defun vterm-copy-mode-done (arg)
   "Save the active region or line to the kill ring and exit `vterm-copy-mode'.
 
@@ -930,21 +937,18 @@ The option `vterm-copy-exclude-prompt' controls if the prompt
 should be included in a line copy.  Using the universal prefix ARG
 will invert `vterm-copy-exclude-prompt' for that call."
   (interactive "P")
-  (unless vterm-copy-mode
-    (user-error "This command is effective only in vterm-copy-mode"))
-  (unless (use-region-p)
-    (goto-char (vterm--get-beginning-of-line))
-    ;; Are we excluding the prompt?
-    (if (or (and vterm-copy-exclude-prompt (not arg))
-            (and (not vterm-copy-exclude-prompt) arg))
-        (goto-char (max (or (vterm--get-prompt-point) 0)
-                        (vterm--get-beginning-of-line))))
-    (set-mark (point))
-    (goto-char (vterm--get-end-of-line)))
-  (kill-ring-save (region-beginning) (region-end))
-  (vterm-copy-mode -1))
-
-;;; Commands
+  (when vterm-copy-mode
+    (unless (use-region-p)
+      (goto-char (vterm--get-beginning-of-line))
+      ;; Are we excluding the prompt?
+      (if (or (and vterm-copy-exclude-prompt (not arg))
+              (and (not vterm-copy-exclude-prompt) arg))
+          (goto-char (max (or (vterm--get-prompt-point) 0)
+                          (vterm--get-beginning-of-line))))
+      (set-mark (point))
+      (goto-char (vterm--get-end-of-line)))
+    (kill-ring-save (region-beginning) (region-end))
+    (vterm-copy-mode -1)))
 
 (defun vterm--self-insert-meta ()
   (interactive)
@@ -970,7 +974,7 @@ will invert `vterm-copy-exclude-prompt' for that call."
       (vterm--update vterm--term key shift meta ctrl)
       (setq vterm--redraw-immediately t)
       (when accept-proc-output
-        (accept-process-output vterm--process vterm-timer-delay nil t)))))
+        (accept-process-output vterm--process nil nil t)))))
 
 (defun vterm-send (key)
   "Send KEY to libvterm.  KEY can be anything `kbd' understands."
@@ -999,7 +1003,7 @@ running in the terminal (like Emacs or Nano)."
   (vterm-send-key "<stop>"))
 
 (defun vterm-send-return ()
-  "Send `C-m' to the libvterm."
+  "Send C-m to libvterm."
   (interactive)
   (deactivate-mark)
   (when vterm--term
@@ -1008,111 +1012,105 @@ running in the terminal (like Emacs or Nano)."
       (process-send-string vterm--process "\C-m"))))
 
 (defun vterm-send-tab ()
-  "Send `<tab>' to the libvterm."
+  "Send <tab> to libvterm."
   (interactive)
   (vterm-send-key "<tab>"))
 
 (defun vterm-send-space ()
-  "Send `<space>' to the libvterm."
+  "Send <space> to libvterm."
   (interactive)
   (vterm-send-key " "))
 
 (defun vterm-send-backspace ()
-  "Send `<backspace>' to the libvterm."
+  "Send <backspace> to libvterm."
   (interactive)
   (vterm-send-key "<backspace>"))
 
 (defun vterm-send-delete ()
-  "Send `<delete>' to the libvterm."
+  "Send <delete> to libvterm."
   (interactive)
   (vterm-send-key "<delete>"))
 
 (defun vterm-send-meta-backspace ()
-  "Send `M-<backspace>' to the libvterm."
+  "Send M-<backspace> to libvterm."
   (interactive)
   (vterm-send-key "<backspace>" nil t))
 
 (defun vterm-send-up ()
-  "Send `<up>' to the libvterm."
+  "Send <up> to libvterm."
   (interactive)
   (vterm-send-key "<up>"))
 (make-obsolete 'vterm-send-up 'vterm--self-insert "v0.1")
 
 (defun vterm-send-down ()
-  "Send `<down>' to the libvterm."
+  "Send <down> to libvterm."
   (interactive)
   (vterm-send-key "<down>"))
 (make-obsolete 'vterm-send-down 'vterm--self-insert "v0.1")
 
 (defun vterm-send-left ()
-  "Send `<left>' to the libvterm."
+  "Send <left> to libvterm."
   (interactive)
   (vterm-send-key "<left>"))
 (make-obsolete 'vterm-send-left 'vterm--self-insert "v0.1")
 
 (defun vterm-send-right ()
-  "Send `<right>' to the libvterm."
+  "Send <right> to libvterm."
   (interactive)
   (vterm-send-key "<right>"))
 (make-obsolete 'vterm-send-right 'vterm--self-insert "v0.1")
 
 (defun vterm-send-prior ()
-  "Send `<prior>' to the libvterm."
+  "Send <prior> to libvterm."
   (interactive)
   (vterm-send-key "<prior>"))
 (make-obsolete 'vterm-send-prior 'vterm--self-insert "v0.1")
 
 (defun vterm-send-next ()
-  "Send `<next>' to the libvterm."
+  "Send <next> to libvterm."
   (interactive)
   (vterm-send-key "<next>"))
 (make-obsolete 'vterm-send-next 'vterm--self-insert "v0.1")
 
 (defun vterm-send-meta-dot ()
-  "Send `M-.' to the libvterm."
+  "Send M-. to libvterm."
   (interactive)
   (vterm-send-key "." nil t))
 (make-obsolete 'vterm-send-meta-dot 'vterm--self-insert "v0.1")
 
 (defun vterm-send-meta-comma ()
-  "Send `M-,' to the libvterm."
+  "Send M-, to libvterm."
   (interactive)
   (vterm-send-key "," nil t))
 (make-obsolete 'vterm-send-meta-comma 'vterm--self-insert "v0.1")
 
 (defun vterm-send-ctrl-slash ()
-  "Send `C-\' to the libvterm."
+  "Send C-\ to libvterm."
   (interactive)
   (vterm-send-key "\\" nil nil t))
 (make-obsolete 'vterm-send-ctrl-slash 'vterm--self-insert "v0.1")
 
 (defun vterm-send-escape ()
-  "Send `<escape>' to the libvterm."
+  "Send <escape> to libvterm."
   (interactive)
   (vterm-send-key "<escape>"))
 
 (defun vterm-clear-scrollback ()
-  "Send `<clear-scrollback>' to the libvterm."
+  "Send <clear-scrollback> to libvterm."
   (interactive)
   (vterm-send-key "<clear_scrollback>"))
 
 (defun vterm-clear (&optional arg)
-  "Send `<clear>' to the libvterm.
+  "Send <clear> to libvterm.
 
-`vterm-clear-scrollback' determines whether
-`vterm-clear' should also clear the scrollback or not.
-
-This behavior can be altered by calling `vterm-clear' with a
-prefix argument ARG or with \\[universal-argument]."
+A prefix argument ARG negates the `vterm-clear-scrollback' setting."
   (interactive "P")
-  (if (or
-       (and vterm-clear-scrollback-when-clearing (not arg))
-       (and arg (not vterm-clear-scrollback-when-clearing)))
-      (vterm-clear-scrollback))
+  (when (funcall (if arg #'not #'identity) vterm-clear-scrollback-when-clearing)
+    (vterm-clear-scrollback))
   (vterm-send-key "l" nil nil :ctrl))
 
 (defun vterm-undo ()
-  "Send `C-_' to the libvterm."
+  "Send C-_ to the libvterm."
   (interactive)
   (vterm-send-key "_" nil nil t))
 
@@ -1169,8 +1167,16 @@ Optional argument PASTE-P paste-p."
       (vterm--update vterm--term (char-to-string char)))
     (when paste-p
       (vterm--update vterm--term "<end_paste>")))
+<<<<<<< HEAD
   (setq vterm--redraw-immediately t)
   (accept-process-output vterm--process vterm-timer-delay nil t))
+||||||| parent of b36b2e9 (checkpoint)
+  (setq vterm--redraw-immididately t)
+  (accept-process-output vterm--process vterm-timer-delay nil t))
+=======
+  (setq vterm--redraw-immediately t)
+  (accept-process-output vterm--process nil nil t))
+>>>>>>> b36b2e9 (checkpoint)
 
 (defun vterm-insert (&rest contents)
   "Insert the arguments, either strings or characters, at point.
@@ -1185,7 +1191,7 @@ Provide similar behavior as `insert' for vterm."
           (vterm--update vterm--term (char-to-string char)))))
     (vterm--update vterm--term "<end_paste>")
     (setq vterm--redraw-immediately t)
-    (accept-process-output vterm--process vterm-timer-delay nil t)))
+    (accept-process-output vterm--process nil nil t)))
 
 (defun vterm-delete-region (start end)
   "Delete the text between START and END for vterm. "
@@ -1222,8 +1228,6 @@ The return value is `t' when point moved successfully."
         (while (and (vterm--forward-char)
                     (< (point) pos)))
         (>= (point) pos))))))
-
-;;; Internal
 
 (defun vterm--forward-char ()
   "Move point 1 character forward ().
@@ -1311,14 +1315,8 @@ looks like: ((\"m\" :shift ))"
 
 (defun vterm--invalidate ()
   "The terminal buffer is invalidated, the buffer needs redrawing."
-  (if (and (not vterm--redraw-immediately)
-           vterm-timer-delay)
-      (unless vterm--redraw-timer
-        (setq vterm--redraw-timer
-              (run-with-timer vterm-timer-delay nil
-                              #'vterm--delayed-redraw (current-buffer))))
-    (vterm--delayed-redraw (current-buffer))
-    (setq vterm--redraw-immediately nil)))
+  (vterm--delayed-redraw (current-buffer))
+  (setq vterm--redraw-immediately nil))
 
 (defun vterm-check-proc (&optional buffer)
   "Check if there is a running process associated to the vterm buffer BUFFER.
@@ -1364,8 +1362,6 @@ Search Manipulate Selection Data in
       (kill-new data)
       (message "kill-ring is updated by vterm OSC 52(Manipulate Selection Data)"))
     ))
-
-;;; Entry Points
 
 ;;;###autoload
 (defun vterm (&optional arg)
@@ -1421,8 +1417,6 @@ value of `vterm-buffer-name'."
       (unless (derived-mode-p 'vterm-mode)
         (vterm-mode)))
     buf))
-
-;;; Internal
 
 (defun vterm--flush-output (output)
   "Send the virtual terminal's OUTPUT to the shell."

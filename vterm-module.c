@@ -1222,8 +1222,8 @@ static VTermSelectionCallbacks selection_callbacks = {
 
 #endif
 
-emacs_value Fvterm_new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                       void *data) {
+emacs_value Fvterm__new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			void *data) {
   Term *term = malloc(sizeof(Term));
 
   int rows = env->extract_integer(env, args[0]);
@@ -1307,8 +1307,8 @@ emacs_value Fvterm_new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return env->make_user_ptr(env, term_finalize, term);
 }
 
-emacs_value Fvterm_update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                          void *data) {
+emacs_value Fvterm__update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			   void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
 
   // Process keys
@@ -1337,8 +1337,8 @@ emacs_value Fvterm_update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return env->make_integer(env, 0);
 }
 
-emacs_value Fvterm_redraw(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                          void *data) {
+emacs_value Fvterm__redraw(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			   void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
   term_redraw(term, env);
   return env->make_integer(env, 0);
@@ -1360,8 +1360,8 @@ emacs_value Fvterm_write_input(emacs_env *env, ptrdiff_t nargs,
   return env->make_integer(env, 0);
 }
 
-emacs_value Fvterm_set_size(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                            void *data) {
+emacs_value Fvterm__set_size(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			     void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
   int rows = env->extract_integer(env, args[1]);
   int cols = env->extract_integer(env, args[2]);
@@ -1383,8 +1383,8 @@ emacs_value Fvterm_set_size(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return Qnil;
 }
 
-emacs_value Fvterm_set_pty_name(emacs_env *env, ptrdiff_t nargs,
-                                emacs_value args[], void *data) {
+emacs_value Fvterm__set_pty_name(emacs_env *env, ptrdiff_t nargs,
+				 emacs_value args[], void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
 
   if (nargs > 1) {
@@ -1397,8 +1397,8 @@ emacs_value Fvterm_set_pty_name(emacs_env *env, ptrdiff_t nargs,
   }
   return Qnil;
 }
-emacs_value Fvterm_get_pwd(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                           void *data) {
+emacs_value Fvterm__get_pwd(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			    void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
   int linenum = env->extract_integer(env, args[1]);
   int row = linenr_to_row(term, linenum);
@@ -1407,8 +1407,8 @@ emacs_value Fvterm_get_pwd(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return dir ? env->make_string(env, dir, strlen(dir)) : Qnil;
 }
 
-emacs_value Fvterm_get_icrnl(emacs_env *env, ptrdiff_t nargs,
-                             emacs_value args[], void *data) {
+emacs_value Fvterm__get_icrnl(emacs_env *env, ptrdiff_t nargs,
+			      emacs_value args[], void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
 
   if (term->pty_fd > 0) {
@@ -1423,8 +1423,8 @@ emacs_value Fvterm_get_icrnl(emacs_env *env, ptrdiff_t nargs,
   return Qnil;
 }
 
-emacs_value Fvterm_reset_cursor_point(emacs_env *env, ptrdiff_t nargs,
-                                      emacs_value args[], void *data) {
+emacs_value Fvterm__reset_cursor_point(emacs_env *env, ptrdiff_t nargs,
+				       emacs_value args[], void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
   int line = row_to_linenr(term, term->cursor.row);
   goto_line(env, line);
@@ -1514,36 +1514,36 @@ int emacs_module_init(struct emacs_runtime *ert) {
   // Exported functions
   emacs_value fun;
   fun =
-      env->make_function(env, 4, 8, Fvterm_new, "Allocate a new vterm.", NULL);
+      env->make_function(env, 4, 8, Fvterm__new, "Allocate a new vterm.", NULL);
   bind_function(env, "vterm--new", fun);
 
-  fun = env->make_function(env, 1, 5, Fvterm_update,
+  fun = env->make_function(env, 1, 5, Fvterm__update,
                            "Process io and update the screen.", NULL);
   bind_function(env, "vterm--update", fun);
 
   fun =
-      env->make_function(env, 1, 1, Fvterm_redraw, "Redraw the screen.", NULL);
+      env->make_function(env, 1, 1, Fvterm__redraw, "Redraw the screen.", NULL);
   bind_function(env, "vterm--redraw", fun);
 
   fun = env->make_function(env, 2, 2, Fvterm_write_input,
                            "Write input to vterm.", NULL);
   bind_function(env, "vterm--write-input", fun);
 
-  fun = env->make_function(env, 3, 3, Fvterm_set_size,
+  fun = env->make_function(env, 3, 3, Fvterm__set_size,
                            "Set the size of the terminal.", NULL);
   bind_function(env, "vterm--set-size", fun);
 
-  fun = env->make_function(env, 2, 2, Fvterm_set_pty_name,
+  fun = env->make_function(env, 2, 2, Fvterm__set_pty_name,
                            "Set the name of the pty.", NULL);
   bind_function(env, "vterm--set-pty-name", fun);
-  fun = env->make_function(env, 2, 2, Fvterm_get_pwd,
+  fun = env->make_function(env, 2, 2, Fvterm__get_pwd,
                            "Get the working directory of at line n.", NULL);
   bind_function(env, "vterm--get-pwd-raw", fun);
-  fun = env->make_function(env, 1, 1, Fvterm_reset_cursor_point,
+  fun = env->make_function(env, 1, 1, Fvterm__reset_cursor_point,
                            "Reset cursor position.", NULL);
   bind_function(env, "vterm--reset-point", fun);
 
-  fun = env->make_function(env, 1, 1, Fvterm_get_icrnl,
+  fun = env->make_function(env, 1, 1, Fvterm__get_icrnl,
                            "Get the icrnl state of the pty", NULL);
   bind_function(env, "vterm--get-icrnl", fun);
 

@@ -10,10 +10,6 @@ else
 	SOEXT := .so
 endif
 
-vterm-module$(SOEXT): $(CSRC) CMakeLists.txt
-	cmake -B build
-	cmake --build build --clean-first --config Release -j $$(nproc)
-
 .PHONY: compile
 compile: vterm-module$(SOEXT)
 	$(EMACS) -batch -L . -L test \
@@ -22,6 +18,10 @@ compile: vterm-module$(SOEXT)
 	  -f package-initialize \
 	  -f batch-byte-compile $(ELSRC) $(TESTSRC); \
 	  (ret=$$? ; rm -f $(ELSRC:.el=.elc) $(TESTSRC:.el=.elc) && exit $$ret)
+
+vterm-module$(SOEXT): $(CSRC) CMakeLists.txt
+	cmake -B build
+	cmake --build build --clean-first --config Release -j $$(nproc)
 
 .PHONY: test
 test: compile
@@ -40,7 +40,7 @@ dist: dist-clean
 	$(EMACS) -batch -L . -l vterm-package -f vterm-package-inception
 	( \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
-	rsync -R vterm-module$(SOEXT) emacs-module.h $(ELSRC) $${PKG_NAME}; \
+	rsync -R vterm-module$(SOEXT) $(ELSRC) $${PKG_NAME}; \
 	tar cf $${PKG_NAME}.tar $${PKG_NAME}; \
 	)
 

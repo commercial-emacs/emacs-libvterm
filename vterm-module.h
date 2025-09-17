@@ -143,28 +143,28 @@ static void invalidate_terminal(Term *term, int start_row, int end_row);
 
 void term_finalize(void *object);
 
-emacs_value Fvterm_new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                       void *data);
-emacs_value Fvterm_update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                          void *data);
-emacs_value Fvterm_redraw(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                          void *data);
+emacs_value Fvterm__new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			void *data);
+emacs_value Fvterm__update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			   void *data);
+emacs_value Fvterm__redraw(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			   void *data);
 emacs_value Fvterm_write_input(emacs_env *env, ptrdiff_t nargs,
                                emacs_value args[], void *data);
-emacs_value Fvterm_set_size(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                            void *data);
-emacs_value Fvterm_set_pty_name(emacs_env *env, ptrdiff_t nargs,
-                                emacs_value args[], void *data);
-emacs_value Fvterm_get_icrnl(emacs_env *env, ptrdiff_t nargs,
-                             emacs_value args[], void *data);
+emacs_value Fvterm__set_size(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			     void *data);
+emacs_value Fvterm__set_pty_name(emacs_env *env, ptrdiff_t nargs,
+				 emacs_value args[], void *data);
+emacs_value Fvterm__get_icrnl(emacs_env *env, ptrdiff_t nargs,
+			      emacs_value args[], void *data);
 
-emacs_value Fvterm_get_pwd(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                           void *data);
+emacs_value Fvterm__get_pwd(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
+			    void *data);
 
 emacs_value Fvterm_get_prompt_point(emacs_env *env, ptrdiff_t nargs,
                                     emacs_value args[], void *data);
-emacs_value Fvterm_reset_cursor_point(emacs_env *env, ptrdiff_t nargs,
-                                      emacs_value args[], void *data);
+emacs_value Fvterm__reset_cursor_point(emacs_env *env, ptrdiff_t nargs,
+				       emacs_value args[], void *data);
 
 VTERM_EXPORT int emacs_module_init(struct emacs_runtime *ert);
 
