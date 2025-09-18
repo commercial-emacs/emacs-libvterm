@@ -3,3 +3,4 @@
 *.elc
 /deps
 compile_commands.json
+/.cache
