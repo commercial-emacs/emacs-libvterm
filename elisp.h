@@ -50,16 +50,15 @@ extern emacs_value Fpoint;
 extern emacs_value Fput_text_property;
 extern emacs_value Fadd_text_properties;
 extern emacs_value Fset;
-extern emacs_value Fvterm_flush_output;
+extern emacs_value Fvterm__flush_output;
 extern emacs_value Fget_buffer_window_list;
 extern emacs_value Fselected_window;
-extern emacs_value Fvterm_set_title;
-extern emacs_value Fvterm_set_directory;
-extern emacs_value Fvterm_invalidate;
+extern emacs_value Fvterm__set_title;
+extern emacs_value Fvterm__set_directory;
 extern emacs_value Feq;
-extern emacs_value Fvterm_get_color;
-extern emacs_value Fvterm_eval;
-extern emacs_value Fvterm_set_selection;
+extern emacs_value Fvterm__get_color;
+extern emacs_value Fvterm__eval;
+extern emacs_value Fvterm__set_selection;
 
 // Utils
 void bind_function(emacs_env *env, const char *name, emacs_value Sfun);
@@ -91,7 +90,6 @@ emacs_value get_buffer_window_list(emacs_env *env);
 emacs_value selected_window(emacs_env *env);
 void set_title(emacs_env *env, emacs_value string);
 void set_directory(emacs_env *env, emacs_value string);
-void vterm_invalidate(emacs_env *env);
 emacs_value vterm_get_color(emacs_env *env, int index, emacs_value args);
 emacs_value vterm_eval(emacs_env *env, emacs_value string);
 emacs_value vterm_set_selection(emacs_env *env, emacs_value selection_target,

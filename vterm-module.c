@@ -389,9 +389,9 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
   return;
 }
 // Refresh the screen (visible part of the buffer when the terminal is
-// focused) of a invalidated terminal
+// focused) of an invalidated terminal
 static void refresh_screen(Term *term, emacs_env *env) {
-  // Term height may have decreased before `invalid_end` reflects it.
+  // Term height may have decreased before invalid_end reflects it.
   term->invalid_end = MIN(term->invalid_end, term->height);
 
   if (term->invalid_end >= term->invalid_start) {
@@ -404,7 +404,7 @@ static void refresh_screen(Term *term, emacs_env *env) {
     refresh_lines(term, env, term->invalid_start, term->invalid_end,
                   term->width);
 
-    /* term->linenum_added is lines added  by window height increased */
+    /* lines added by increase in  window height */
     term->linenum += term->linenum_added;
     term->linenum_added = 0;
   }
@@ -889,7 +889,7 @@ static void term_flush_output(Term *term, emacs_env *env) {
     len = vterm_output_read(term->vt, buffer, len);
 
     emacs_value output = env->make_string(env, buffer, len);
-    env->funcall(env, Fvterm_flush_output, 1, (emacs_value[]){output});
+    env->funcall(env, Fvterm__flush_output, 1, (emacs_value[]){output});
   }
 }
 
@@ -1331,20 +1331,14 @@ emacs_value Fvterm__update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   // Flush output
   term_flush_output(term, env);
   if (term->is_invalidated) {
-    vterm_invalidate(env);
+    term_redraw(term, env);
+    /* reset hscroll if (window-buffer (selected-window)) is term's. */
   }
 
   return env->make_integer(env, 0);
 }
 
-emacs_value Fvterm__redraw(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-			   void *data) {
-  Term *term = env->get_user_ptr(env, args[0]);
-  term_redraw(term, env);
-  return env->make_integer(env, 0);
-}
-
-emacs_value Fvterm_write_input(emacs_env *env, ptrdiff_t nargs,
+emacs_value Fvterm__write_input(emacs_env *env, ptrdiff_t nargs,
                                emacs_value args[], void *data) {
   Term *term = env->get_user_ptr(env, args[0]);
   ptrdiff_t len = string_bytes(env, args[1]);
@@ -1479,7 +1473,7 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Fadd_text_properties =
       env->make_global_ref(env, env->intern(env, "add-text-properties"));
   Fset = env->make_global_ref(env, env->intern(env, "set"));
-  Fvterm_flush_output =
+  Fvterm__flush_output =
       env->make_global_ref(env, env->intern(env, "vterm--flush-output"));
   Fforward_line = env->make_global_ref(env, env->intern(env, "forward-line"));
   Fgoto_line = env->make_global_ref(env, env->intern(env, "vterm--goto-line"));
@@ -1498,35 +1492,28 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Fselected_window =
       env->make_global_ref(env, env->intern(env, "selected-window"));
 
-  Fvterm_set_title =
+  Fvterm__set_title =
       env->make_global_ref(env, env->intern(env, "vterm--set-title"));
-  Fvterm_set_directory =
+  Fvterm__set_directory =
       env->make_global_ref(env, env->intern(env, "vterm--set-directory"));
-  Fvterm_invalidate =
-      env->make_global_ref(env, env->intern(env, "vterm--invalidate"));
   Feq = env->make_global_ref(env, env->intern(env, "eq"));
-  Fvterm_get_color =
+  Fvterm__get_color =
       env->make_global_ref(env, env->intern(env, "vterm--get-color"));
-  Fvterm_eval = env->make_global_ref(env, env->intern(env, "vterm--eval"));
-  Fvterm_set_selection =
+  Fvterm__eval = env->make_global_ref(env, env->intern(env, "vterm--eval"));
+  Fvterm__set_selection =
       env->make_global_ref(env, env->intern(env, "vterm--set-selection"));
 
   // Exported functions
   emacs_value fun;
-  fun =
-      env->make_function(env, 4, 8, Fvterm__new, "Allocate a new vterm.", NULL);
+  fun = env->make_function(env, 4, 8, Fvterm__new, "Allocate a new vterm.", NULL);
   bind_function(env, "vterm--new", fun);
 
   fun = env->make_function(env, 1, 5, Fvterm__update,
-                           "Process io and update the screen.", NULL);
+			   "Process io and update the screen.", NULL);
   bind_function(env, "vterm--update", fun);
 
-  fun =
-      env->make_function(env, 1, 1, Fvterm__redraw, "Redraw the screen.", NULL);
-  bind_function(env, "vterm--redraw", fun);
-
-  fun = env->make_function(env, 2, 2, Fvterm_write_input,
-                           "Write input to vterm.", NULL);
+  fun = env->make_function(env, 2, 2, Fvterm__write_input,
+			   "Write input to vterm.", NULL);
   bind_function(env, "vterm--write-input", fun);
 
   fun = env->make_function(env, 3, 3, Fvterm__set_size,
@@ -1536,12 +1523,14 @@ int emacs_module_init(struct emacs_runtime *ert) {
   fun = env->make_function(env, 2, 2, Fvterm__set_pty_name,
                            "Set the name of the pty.", NULL);
   bind_function(env, "vterm--set-pty-name", fun);
+
   fun = env->make_function(env, 2, 2, Fvterm__get_pwd,
                            "Get the working directory of at line n.", NULL);
   bind_function(env, "vterm--get-pwd-raw", fun);
+
   fun = env->make_function(env, 1, 1, Fvterm__reset_cursor_point,
                            "Reset cursor position.", NULL);
-  bind_function(env, "vterm--reset-point", fun);
+  bind_function(env, "vterm--reset-cursor-point", fun);
 
   fun = env->make_function(env, 1, 1, Fvterm__get_icrnl,
                            "Get the icrnl state of the pty", NULL);

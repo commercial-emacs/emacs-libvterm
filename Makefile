@@ -3,6 +3,10 @@ EMACS ?= emacs
 CSRC := $(shell git ls-files *.[ch])
 ELSRC := $(shell git ls-files *.el)
 TESTSRC := $(shell git ls-files test/*.el)
+BEAR := $(shell command -v bear 2>/dev/null)
+ifneq ($(BEAR),)
+	BEAR := $(BEAR) --
+endif
 
 ifeq ($(shell uname -s),Darwin)
 	SOEXT := .dylib
@@ -21,7 +25,7 @@ compile: vterm-module$(SOEXT)
 
 vterm-module$(SOEXT): $(CSRC) CMakeLists.txt
 	cmake -B build
-	cmake --build build --clean-first --config Release -j $$(nproc)
+	$(BEAR) cmake --build build --clean-first --config Release -j $$(nproc)
 
 .PHONY: test
 test: compile

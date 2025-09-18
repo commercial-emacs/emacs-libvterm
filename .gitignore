@@ -2,3 +2,4 @@
 /vterm-module.so
 *.elc
 /deps
+compile_commands.json

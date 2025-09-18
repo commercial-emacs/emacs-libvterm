@@ -378,16 +378,6 @@ will ask the user whether to build the module when `vterm` is first called. To
 avoid this question and always compile the module, set
 `vterm-always-compile-module` to `t`.
 
-## `vterm-copy-mode-remove-fake-newlines`
-
-When not-nil fake newlines are removed on entering copy mode.
-vterm inserts fake-newlines purely for rendering. When using
-`vterm-copy-mode` these are in conflict with many emacs functions
-like isearch-forward. if this varialbe is not-nil the
-fake-newlines are removed on entering copy-mode and re-inserted
-on leaving copy mode. Also truncate-lines is set to t on entering
-copy-mode and set to nil on leaving.
-
 ## `vterm-tramp-shells`
 
 The shell that gets run in the vterm for tramp.

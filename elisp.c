@@ -47,16 +47,15 @@ emacs_value Fapply;
 emacs_value Fput_text_property;
 emacs_value Fadd_text_properties;
 emacs_value Fset;
-emacs_value Fvterm_flush_output;
+emacs_value Fvterm__flush_output;
 emacs_value Fget_buffer_window_list;
 emacs_value Fselected_window;
-emacs_value Fvterm_set_title;
-emacs_value Fvterm_set_directory;
-emacs_value Fvterm_invalidate;
+emacs_value Fvterm__set_title;
+emacs_value Fvterm__set_directory;
 emacs_value Feq;
-emacs_value Fvterm_get_color;
-emacs_value Fvterm_eval;
-emacs_value Fvterm_set_selection;
+emacs_value Fvterm__get_color;
+emacs_value Fvterm__eval;
+emacs_value Fvterm__set_selection;
 
 /* Set the function cell of the symbol named NAME to SFUN using
    the 'fset' function.  */
@@ -185,26 +184,23 @@ void set_cursor_blink(emacs_env *env, bool blink) {
 
 emacs_value vterm_get_color(emacs_env *env, int index, emacs_value args) {
   emacs_value idx = env->make_integer(env, index);
-  return env->funcall(env, Fapply, 3, (emacs_value[]){ Fvterm_get_color, idx, args });
+  return env->funcall(env, Fapply, 3, (emacs_value[]){ Fvterm__get_color, idx, args });
 }
 
 void set_title(emacs_env *env, emacs_value string) {
-  env->funcall(env, Fvterm_set_title, 1, (emacs_value[]){string});
+  env->funcall(env, Fvterm__set_title, 1, (emacs_value[]){string});
 }
 
 void set_directory(emacs_env *env, emacs_value string) {
-  env->funcall(env, Fvterm_set_directory, 1, (emacs_value[]){string});
+  env->funcall(env, Fvterm__set_directory, 1, (emacs_value[]){string});
 }
 
-void vterm_invalidate(emacs_env *env) {
-  env->funcall(env, Fvterm_invalidate, 0, NULL);
-}
 emacs_value vterm_eval(emacs_env *env, emacs_value string) {
-  return env->funcall(env, Fvterm_eval, 1, (emacs_value[]){string});
+  return env->funcall(env, Fvterm__eval, 1, (emacs_value[]){string});
 }
 
 emacs_value vterm_set_selection(emacs_env *env, emacs_value selection_target,
                                 emacs_value selection_data) {
-  return env->funcall(env, Fvterm_set_selection, 2,
+  return env->funcall(env, Fvterm__set_selection, 2,
                       (emacs_value[]){selection_target, selection_data});
 }
