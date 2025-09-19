@@ -1307,26 +1307,25 @@ Argument EVENT process event."
 
 (defun vterm--delete-lines (line-num count &optional delete-whole-line)
   "Delete COUNT lines from LINE-NUM.
-If LINE-NUM is negative backward-line from end of buffer.
+If LINE-NUM is nonpositive, delete COUNT lines from (END + LINE-NUM).
 If option DELETE-WHOLE-LINE is non-nil, then this command kills
 the whole line including its terminating newline"
   (save-excursion
     (when (vterm--goto-line line-num)
       (vterm--delete-region (point) (line-end-position count))
-      (when (and delete-whole-line
-                 (looking-at "\n"))
+      (when (and delete-whole-line (looking-at "\n"))
         (vterm--delete-char 1)))))
 
 (defun vterm--goto-line (n)
-  "Go to line N and return true on success.
-If N is negative backward-line from end of buffer."
-  (cond
-   ((> n 0)
-    (goto-char (point-min))
-    (eq 0 (forward-line (1- n))))
-   (t
-    (goto-char (point-max))
-    (eq 0 (forward-line n)))))
+  "Move point to beginning of Nth line.
+If N is nonpositive, move point to beginning of (END + N)th line.
+Return true on success."
+  (zerop (if (> n 0)
+             (progn
+               (goto-char (point-min))
+               (forward-line (1- n)))
+           (goto-char (point-max))
+           (forward-line n))))
 
 (defun vterm--set-title (title)
   "Use TITLE to set the buffer name according to `vterm-buffer-name-string'."

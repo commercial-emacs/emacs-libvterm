@@ -1,7 +1,6 @@
 #include "vterm-module.h"
 #include "elisp.h"
 #include "utf8.h"
-#include <assert.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
@@ -198,7 +197,6 @@ static void fetch_cell(Term *term, int row, int col, VTermScreenCell *cell) {
       VTermColor fg, bg;
       VTermState *state = vterm_obtain_state(term->vt);
       vterm_state_get_default_colors(state, &fg, &bg);
-
       *cell = (VTermScreenCell){.chars = {0}, .width = 1, .bg = bg};
     }
   } else {
@@ -295,53 +293,47 @@ static void goto_col(Term *term, emacs_env *env, int row, int end_col) {
 
 static void refresh_lines(Term *term, emacs_env *env, int start_row,
                           int end_row, int end_col) {
-  if (end_row < start_row) {
-    return;
-  }
-  int i, j;
-
-#define PUSH_BUFFER(c)                                                         \
-  do {                                                                         \
-    if (length == capacity) {                                                  \
-      capacity += end_col * 4;                                                 \
-      buffer = realloc(buffer, capacity * sizeof(char));                       \
-    }                                                                          \
-    buffer[length] = (c);                                                      \
-    length++;                                                                  \
+#define PUSH_BUFFER(c)						\
+  do {								\
+    if (length == capacity) {					\
+      capacity += end_col * 4;					\
+      buffer = realloc(buffer, capacity * sizeof(char));	\
+    }								\
+    buffer[length++] = (c);					\
   } while (0)
 
-  int capacity = ((end_row - start_row + 1) * end_col) * 4;
+  if (end_row < start_row)
+    return;
+
   int length = 0;
-  char *buffer = malloc(capacity * sizeof(char));
-  VTermScreenCell cell;
-  VTermScreenCell lastCell;
-  fetch_cell(term, start_row, 0, &lastCell);
+  int capacity = ((end_row - start_row + 1) * end_col) * 4;
+  char *buffer = (char *)malloc(capacity * sizeof(char));
+  VTermScreenCell cell, last_cell;
+  fetch_cell(term, start_row, 0, &last_cell);
 
-  for (i = start_row; i < end_row; i++) {
-
-    int newline = 0;
-    int isprompt = 0;
-    for (j = 0; j < end_col; j++) {
+  for (int i = start_row; i < end_row; ++i) {
+    int newline = 0, isprompt = 0;
+    for (int j = 0; j < end_col; ++j) {
       fetch_cell(term, i, j, &cell);
+
       if (isprompt && length > 0) {
-        emacs_value text = render_text(env, term, buffer, length, &lastCell);
-        insert(env, render_prompt(env, text));
+        insert(env, render_prompt(env, render_text(env, term, buffer, length,
+						   &last_cell)));
         length = 0;
       }
 
       isprompt = is_end_of_prompt(term, end_col, i, j);
       if (isprompt && length > 0) {
-        insert(env, render_text(env, term, buffer, length, &lastCell));
+        insert(env, render_text(env, term, buffer, length, &last_cell));
         length = 0;
       }
 
-      if (!compare_cells(&cell, &lastCell)) {
-        emacs_value text = render_text(env, term, buffer, length, &lastCell);
-        insert(env, text);
+      if (!compare_cells(&cell, &last_cell)) {
+        insert(env, render_text(env, term, buffer, length, &last_cell));
         length = 0;
       }
 
-      lastCell = cell;
+      last_cell = cell;
       if (cell.chars[0] == 0) {
         if (is_eol(term, end_col, i, j)) {
           /* This cell is EOL if this and every cell to the right is black */
@@ -354,39 +346,32 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
         for (int k = 0; k < VTERM_MAX_CHARS_PER_CELL && cell.chars[k]; ++k) {
           unsigned char bytes[4];
           size_t count = codepoint_to_utf8(cell.chars[k], bytes);
-          for (int l = 0; l < count; l++) {
+          for (int l = 0; l < count; ++l) {
             PUSH_BUFFER(bytes[l]);
           }
         }
       }
 
-      if (cell.width > 1) {
-        int w = cell.width - 1;
-        j = j + w;
-      }
+      if (cell.width > 1)
+        j += (cell.width - 1);
     }
     if (isprompt && length > 0) {
-      emacs_value text = render_text(env, term, buffer, length, &lastCell);
-      insert(env, render_prompt(env, text));
+      insert(env, render_prompt(env, render_text(env, term, buffer, length,
+						 &last_cell)));
       length = 0;
       isprompt = 0;
     }
 
     if (!newline) {
-      emacs_value text = render_text(env, term, buffer, length, &lastCell);
-      insert(env, text);
+      insert(env, render_text(env, term, buffer, length, &last_cell));
       length = 0;
-      text = render_fake_newline(env, term);
-      insert(env, text);
+      insert(env, render_fake_newline(env, term));
     }
   }
-  emacs_value text = render_text(env, term, buffer, length, &lastCell);
-  insert(env, text);
 
-#undef PUSH_BUFFER
+  insert(env, render_text(env, term, buffer, length, &last_cell));
   free(buffer);
-
-  return;
+#undef PUSH_BUFFER
 }
 // Refresh the screen (visible part of the buffer when the terminal is
 // focused) of an invalidated terminal
@@ -395,16 +380,13 @@ static void refresh_screen(Term *term, emacs_env *env) {
   term->invalid_end = MIN(term->invalid_end, term->height);
 
   if (term->invalid_end >= term->invalid_start) {
-    int startrow = -(term->height - term->invalid_start - term->linenum_added);
-    /* startrow is negative,so we backward  -startrow lines from end of buffer
-       then delete lines there.
-     */
-    goto_line(env, startrow);
-    delete_lines(env, startrow, term->invalid_end - term->invalid_start, true);
-    refresh_lines(term, env, term->invalid_start, term->invalid_end,
-                  term->width);
+    int invalid_offset = term->height - term->invalid_start - term->linenum_added;
+    int invalid_count = term->invalid_end - term->invalid_start;
+    goto_line(env, -invalid_offset); /* negate to say "from bottom" */
+    delete_lines(env, -invalid_offset, invalid_count, true);
+    refresh_lines(term, env, term->invalid_start, term->invalid_end, term->width);
 
-    /* lines added by increase in  window height */
+    /* lines added by increase in window height */
     term->linenum += term->linenum_added;
     term->linenum_added = 0;
   }
@@ -818,29 +800,17 @@ static emacs_value render_text(emacs_env *env, Term *term, char *buffer,
   return text;
 }
 static emacs_value render_prompt(emacs_env *env, emacs_value text) {
-
-  emacs_value properties;
-
-  properties =
-      list(env, (emacs_value[]){Qvterm_prompt, Qt, Qrear_nonsticky, Qt}, 4);
-
+  emacs_value properties =
+    list(env, (emacs_value[]){Qvterm_prompt, Qt, Qrear_nonsticky, Qt}, 4);
   add_text_properties(env, text, properties);
-
   return text;
 }
 
 static emacs_value render_fake_newline(emacs_env *env, Term *term) {
-
-  emacs_value text;
-  text = env->make_string(env, "\n", 1);
-
-  emacs_value properties;
-
-  properties =
-      list(env, (emacs_value[]){Qvterm_line_wrap, Qt, Qrear_nonsticky, Qt}, 4);
-
+  emacs_value text = env->make_string(env, "\n", 1);
+  emacs_value properties =
+    list(env, (emacs_value[]){Qvterm_line_wrap, Qt, Qrear_nonsticky, Qt}, 4);
   add_text_properties(env, text, properties);
-
   return text;
 }
 

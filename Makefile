@@ -40,7 +40,7 @@ dist-clean:
 	)
 
 .PHONY: dist
-dist: dist-clean
+dist: dist-clean compile
 	$(EMACS) -batch -L . -l vterm-package -f vterm-package-inception
 	( \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
