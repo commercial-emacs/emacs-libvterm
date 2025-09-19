@@ -234,8 +234,7 @@ static bool is_eol(Term *term, int end_col, int row, int col) {
   }
 
   ScrollbackLine *sbrow = term->sb_buffer[-row - 1];
-  int c;
-  for (c = col; c < end_col && c < sbrow->cols;) {
+  for (int c = col; c < end_col && c < sbrow->cols;) {
     if (sbrow->cells[c].chars[0]) {
       return 0;
     }
@@ -336,7 +335,6 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       last_cell = cell;
       if (cell.chars[0] == 0) {
         if (is_eol(term, end_col, i, j)) {
-          /* This cell is EOL if this and every cell to the right is black */
           PUSH_BUFFER('\n');
           newline = 1;
           break;
@@ -355,6 +353,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       if (cell.width > 1)
         j += (cell.width - 1);
     }
+
     if (isprompt && length > 0) {
       insert(env, render_prompt(env, render_text(env, term, buffer, length,
 						 &last_cell)));
@@ -364,8 +363,8 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
 
     if (!newline) {
       insert(env, render_text(env, term, buffer, length, &last_cell));
-      length = 0;
       insert(env, render_fake_newline(env, term));
+      length = 0;
     }
   }
 
