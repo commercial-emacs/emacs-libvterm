@@ -136,7 +136,7 @@ static int term_sb_pop(int cols, VTermScreenCell *cells, void *data) {
   // copy to vterm state
   memcpy(cells, sbrow->cells, sizeof(cells[0]) * cols_to_copy);
   size_t col;
-  for (col = cols_to_copy; col < (size_t)cols; col++) {
+  for (col = cols_to_copy; col < (size_t)cols; ++col) {
     cells[col].chars[0] = 0;
     cells[col].width = 1;
   }
@@ -161,7 +161,7 @@ static int term_sb_clear(void *data) {
     return 0;
   }
 
-  for (int i = 0; i < term->sb_current; i++) {
+  for (int i = 0; i < term->sb_current; ++i) {
     if (term->sb_buffer[i]->info != NULL) {
       free_lineinfo(term->sb_buffer[i]->info);
       term->sb_buffer[i]->info = NULL;
@@ -286,7 +286,7 @@ static void goto_col(Term *term, emacs_env *env, int row, int end_col) {
 
   forward_char(env, env->make_integer(env, end_col - offset));
   emacs_value space = env->make_string(env, " ", 1);
-  for (int i = 0; i < beyond_eol; i += 1)
+  for (int i = 0; i < beyond_eol; ++i)
     insert(env, space);
 }
 
@@ -350,8 +350,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
         }
       }
 
-      if (cell.width > 1)
-        j += (cell.width - 1);
+      j += MAX(cell.width - 1, 0);
     }
 
     if (isprompt && length > 0) {
@@ -414,7 +413,7 @@ static int term_resize(int rows, int cols, void *user_data) {
       memmove(term->lines, infos, sizeof(infos[0]) * term->lines_len);
 
       LineInfo *lastline = term->lines[term->lines_len - 1];
-      for (int i = term->lines_len; i < rows; i++) {
+      for (int i = term->lines_len; i < rows; ++i) {
         if (lastline != NULL) {
           LineInfo *line = alloc_lineinfo();
           if (lastline->directory != NULL) {
@@ -509,7 +508,7 @@ static void adjust_topline(Term *term, emacs_env *env) {
   emacs_value windows = get_buffer_window_list(env);
   emacs_value swindow = selected_window(env);
   int winnum = env->extract_integer(env, length(env, windows));
-  for (int i = 0; i < winnum; i++) {
+  for (int i = 0; i < winnum; ++i) {
     emacs_value window = nth(env, i, windows);
     if (eq(env, window, swindow)) {
       int win_body_height =
@@ -985,7 +984,7 @@ static void term_process_key(Term *term, emacs_env *env, unsigned char *key,
 
 void term_finalize(void *object) {
   Term *term = (Term *)object;
-  for (int i = 0; i < term->sb_current; i++) {
+  for (int i = 0; i < term->sb_current; ++i) {
     if (term->sb_buffer[i]->info != NULL) {
       free_lineinfo(term->sb_buffer[i]->info);
       term->sb_buffer[i]->info = NULL;
@@ -1019,7 +1018,7 @@ void term_finalize(void *object) {
     term->selection_data = NULL;
   }
 
-  for (int i = 0; i < term->lines_len; i++) {
+  for (int i = 0; i < term->lines_len; ++i) {
     if (term->lines[i] != NULL) {
       free_lineinfo(term->lines[i]);
       term->lines[i] = NULL;
@@ -1048,7 +1047,7 @@ static int handle_osc_cmd_51(Term *term, char subCmd, char *buffer) {
     strcpy(term->directory, buffer);
     term->directory_changed = true;
 
-    for (int i = term->cursor.row; i < term->lines_len; i++) {
+    for (int i = term->cursor.row; i < term->lines_len; ++i) {
       if (term->lines[i] == NULL) {
         term->lines[i] = alloc_lineinfo();
       }
@@ -1239,7 +1238,7 @@ emacs_value Fvterm__new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   term->disable_inverse_video = disable_inverse_video;
   term->ignore_blink_cursor = ignore_blink_cursor;
   emacs_value newline = env->make_string(env, "\n", 1);
-  for (int i = 0; i < term->height; i++) {
+  for (int i = 0; i < term->height; ++i) {
     insert(env, newline);
   }
   term->linenum = term->height;
@@ -1269,7 +1268,7 @@ emacs_value Fvterm__new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
 
   term->lines = malloc(sizeof(LineInfo *) * rows);
   term->lines_len = rows;
-  for (int i = 0; i < rows; i++) {
+  for (int i = 0; i < rows; ++i) {
     term->lines[i] = NULL;
   }
 
