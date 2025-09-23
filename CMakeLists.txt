@@ -12,6 +12,7 @@ endif()
 add_library(vterm-module MODULE vterm-module.c utf8.c elisp.c)
 set_target_properties(vterm-module PROPERTIES
   C_STANDARD 99
+  COMPILE_WARNING_AS_ERROR ON
   C_VISIBILITY_PRESET "hidden"
   POSITION_INDEPENDENT_CODE ON
   PREFIX ""
@@ -64,6 +65,10 @@ target_include_directories(vterm INTERFACE ${LIBVTERM_INCLUDE_DIR})
 
 # Link with libvterm
 target_link_libraries(vterm-module PUBLIC vterm)
+
+# Add gprof profiling support
+target_compile_options(vterm-module PRIVATE -pg)
+target_link_options(vterm-module PRIVATE -pg)
 
 # Custom run command for testing
 add_custom_target(run
