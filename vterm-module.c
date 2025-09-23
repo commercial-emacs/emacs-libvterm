@@ -365,6 +365,7 @@ static bool compare_cells(VTermScreenCell *a, VTermScreenCell *b) {
   return equal;
 }
 
+#if 0
 static void refresh_lines(Term *term, emacs_env *env, int start_row,
                           int end_row, int end_col) {
 #define PUSH_BUFFER(c)						\
@@ -431,41 +432,65 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
   insert(env, render_text(env, term, buffer, length, &last_cell));
 #undef PUSH_BUFFER
 }
+#endif
 
 static void refresh_lines(Term *term, emacs_env *env, int start_row,
                           int end_row, int end_col) {
-  const int capacity = ((end_row - start_row + 1) * end_col) * 4;
-  char *buffer = (char *)malloc(((end_row - start_row + 1) * end_col) * 4 * sizeof(char));
+  static char *buffer = NULL;
+  static size_t buffer_n = 0;
+
+  size_t len = 0;
+  const size_t max_len = (end_row - start_row + 1) * end_col
+    * VTERM_MAX_CHARS_PER_CELL * 4 * sizeof(char);
+
+  if (max_len > buffer_n)
+    {
+      buffer_n = max_len + 1024;
+      buffer = realloc(buffer, buffer_n);
+    }
+
+  VTermScreenCell cell;
   for (int i = start_row; i < end_row; ++i) {
-    VTermScreenCell cell;
+    VTermRect extent = {.start_row = i, .end_row = i,
+			.start_col = 0, .end_col = end_col };
+    if (vterm_screen_get_attrs_extent(term->vts, &extent,
+				      (VTermPos){.row = i, .col = 0},
+				      VTERM_ALL_ATTRS_MASK)) {
+      int n = vterm_screen_get_text(term->vts, buf, 1 << 13, extent);
+      buf[n] = '\0';
+      // printf("%d.%d -> %d.%d %sT\n", extent.start_row, extent.start_col,
+      // extent.end_row, extent.end_col, buf);
+    }
     for (int j = 0; j < end_col; ) {
       fetch_cell(term, i, j, &cell);
+      // insert(env, emacs_text(env, term, (char *)buffer, len, &cell));
+      // len = 0;
       if (cell.chars[0] == '\0') {
 	if (is_eol(term, end_col, i, j)) {
-	  bytes[0] = '\n';
-	  insert(env, emacs_text(env, term, (char *)bytes, 1, &cell));
+	  buffer[len++] = '\n';
 	  break;
 	} else {
-	  bytes[0] = ' ';
-	  insert(env, emacs_text(env, term, (char *)bytes, 1, &cell));
+	  buffer[len++] = ' ';
 	}
       } else {
 	for (int k = 0; k < VTERM_MAX_CHARS_PER_CELL && cell.chars[k]; ++k) {
 	  unsigned char bytes[4] = {'\0'};
 	  const size_t count = codepoint_to_utf8(cell.chars[k], bytes);
-	  insert(env, emacs_text(env, term, (char *)bytes, count, &cell));
+	  snprintf(buffer + len, count + 1, "%s", (char *)bytes);
+	  len += count;
 	}
       }
       j += cell.width;
     }
-    if (bytes[0] != '\n') {
+    if (buffer[len-1] != '\n') {
       /* We don't know if j==endcol is a bonafide ncurses line feed in
 	 which case, we insert a newline, or a soft wrap, in which
 	 case we don't. */
-      bytes[0] = '\n';
-      insert(env, emacs_text(env, term, (char *)bytes, 1, &cell));
+      buffer[len++] = '\n';
+      // insert(env, emacs_text(env, term, (char *)bytes, 1, &cell));
     }
   }
+  insert(env, emacs_text(env, term, (char *)buffer, len, &cell));
 }
 
 // Refresh the screen (visible part of the buffer when the terminal is
@@ -835,7 +860,7 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *user_data) {
 }
 
 static emacs_value emacs_text(emacs_env *env, Term *term, char *buffer,
-                               int len, const VTermScreenCell *cell) {
+			      int len, const VTermScreenCell *cell) {
   if (len == 0)
     return env->make_string(env, "", 0);
 
