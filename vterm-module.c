@@ -329,110 +329,11 @@ static emacs_value render_text(emacs_env *env, Term *term, char *buffer,
   return text;
 }
 
-static emacs_value render_prompt(emacs_env *env, emacs_value text) {
-  emacs_value properties =
-    list(env, (emacs_value[]){Qvterm_prompt, Qt, Qrear_nonsticky, Qt}, 4);
-  add_text_properties(env, text, properties);
-  return text;
+static bool cluster_p(VTermScreenCell *a, VTermScreenCell *b) {
+  return vterm_color_is_equal(&a->fg, &b->fg)
+    && vterm_color_is_equal(&a->bg, &b->bg)
+    && 0 == memcmp(&a->attrs, &b->attrs, sizeof(b->attrs));
 }
-
-static int is_end_of_prompt(Term *term, int end_col, int row, int col) {
-  LineInfo *info = get_lineinfo(term, row);
-  if (info == NULL) {
-    return 0;
-  }
-  if (info->prompt_col < 0) {
-    return 0;
-  }
-  if (info->prompt_col == col) {
-    return 1;
-  }
-  if (is_eol(term, end_col, row, col) && info->prompt_col >= col) {
-    return 1;
-  }
-  return 0;
-}
-
-static bool compare_cells(VTermScreenCell *a, VTermScreenCell *b) {
-  bool equal = true;
-  equal = equal && vterm_color_is_equal(&a->fg, &b->fg);
-  equal = equal && vterm_color_is_equal(&a->bg, &b->bg);
-  equal = equal && (a->attrs.bold == b->attrs.bold);
-  equal = equal && (a->attrs.underline == b->attrs.underline);
-  equal = equal && (a->attrs.italic == b->attrs.italic);
-  equal = equal && (a->attrs.reverse == b->attrs.reverse);
-  equal = equal && (a->attrs.strike == b->attrs.strike);
-  return equal;
-}
-
-#if 0
-static void refresh_lines(Term *term, emacs_env *env, int start_row,
-                          int end_row, int end_col) {
-#define PUSH_BUFFER(c)						\
-  do {								\
-    if (length == capacity) {					\
-      capacity += end_col * 4;					\
-      buffer = realloc(buffer, capacity * sizeof(char));	\
-    }								\
-    buffer[length++] = (c);					\
-  } while (0)
-
-  int length = 0;
-  int capacity = (end_row - start_row + 1) * end_col * VTERM_MAX_CHARS_PER_CELL * 4;
-  static char *buffer = (char *)malloc(capacity * sizeof(char));
-  VTermScreenCell cell, last_cell;
-  fetch_cell(term, start_row, 0, &last_cell);
-
-  // static malloc which never free
-  // dump all text in one massive string.
-  // run thru vtermscreen calling memcmp on attrs
-  // and vterm_is_color_equal, then apply properties
-  // on cumulative run when change detected.
-  //
-
-  for (int i = start_row; i < end_row; ++i) {
-    int newline = 0;
-    for (int j = 0; j < end_col; ) {
-      fetch_cell(term, i, j, &cell);
-
-      if (!compare_cells(&cell, &last_cell)) {
-        insert(env, render_text(env, term, buffer, length, &last_cell));
-        length = 0;
-      }
-
-      last_cell = cell;
-      if (cell.chars[0] == 0) {
-        if (is_eol(term, end_col, i, j)) {
-          PUSH_BUFFER('\n');
-	  newline = 1;
-	  break;
-	}
-        PUSH_BUFFER(' ');
-      } else {
-        for (int k = 0; k < VTERM_MAX_CHARS_PER_CELL && cell.chars[k]; ++k) {
-          unsigned char bytes[4];
-          size_t count = codepoint_to_utf8(cell.chars[k], bytes);
-          for (int l = 0; l < count; ++l) {
-            PUSH_BUFFER(bytes[l]);
-          }
-        }
-      }
-
-      j += cell.width;
-    }
-
-    if (!newline) {
-      insert(env, render_text(env, term, buffer, length, &last_cell));
-      insert(env, render_fake_newline(env, term));
-      length = 0;
-    }
-
-  }
-
-  insert(env, render_text(env, term, buffer, length, &last_cell));
-#undef PUSH_BUFFER
-}
-#endif
 
 static void refresh_lines(Term *term, emacs_env *env, int start_row,
                           int end_row, int end_col) {
@@ -448,10 +349,17 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       buffer_n = max_len + 1024;
       buffer = realloc(buffer, buffer_n);
     }
-  VTermScreenCell cell;
+
+  VTermScreenCell prev_cell = (VTermScreenCell){.width = 0};
   for (int i = start_row; i < end_row; ++i) {
     for (int j = 0; j < end_col; ) {
+      VTermScreenCell cell;
       fetch_cell(term, i, j, &cell);
+      if (prev_cell.width && !cluster_p(&cell, &prev_cell)) {
+        insert(env, render_text(env, term, buffer, len, &prev_cell));
+        len = 0;
+      }
+
       // insert(env, emacs_text(env, term, (char *)buffer, len, &cell));
       // len = 0;
       if (cell.chars[0] == '\0') {
@@ -470,6 +378,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
 	}
       }
       j += cell.width;
+      prev_cell = cell;
     }
     if (buffer[len-1] != '\n') {
       /* We don't know if j==endcol is a bonafide ncurses line feed in
@@ -479,7 +388,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       // insert(env, emacs_text(env, term, (char *)bytes, 1, &cell));
     }
   }
-  insert(env, emacs_text(env, term, (char *)buffer, len, &cell));
+  insert(env, emacs_text(env, term, (char *)buffer, len, &prev_cell));
 }
 
 // Refresh the screen (visible part of the buffer when the terminal is
@@ -760,16 +669,6 @@ static VTermScreenCallbacks vterm_screen_callbacks = {
     .sb_clear = term_sb_clear,
 #endif
 };
-
-static bool cluster_p(VTermScreenCell *a, VTermScreenCell *b) {
-  return vterm_color_is_equal(&a->fg, &b->fg)
-    && vterm_color_is_equal(&a->bg, &b->bg)
-    && a->attrs.bold == b->attrs.bold
-    && a->attrs.underline == b->attrs.underline
-    && a->attrs.italic == b->attrs.italic
-    && a->attrs.reverse == b->attrs.reverse
-    && a->attrs.strike == b->attrs.strike;
-}
 
 static bool is_key(unsigned char *key, size_t len, char *key_description) {
   return (len == strlen(key_description) &&
