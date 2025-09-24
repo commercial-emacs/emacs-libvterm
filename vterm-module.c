@@ -448,19 +448,8 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       buffer_n = max_len + 1024;
       buffer = realloc(buffer, buffer_n);
     }
-
   VTermScreenCell cell;
   for (int i = start_row; i < end_row; ++i) {
-    VTermRect extent = {.start_row = i, .end_row = i,
-			.start_col = 0, .end_col = end_col };
-    if (vterm_screen_get_attrs_extent(term->vts, &extent,
-				      (VTermPos){.row = i, .col = 0},
-				      VTERM_ALL_ATTRS_MASK)) {
-      int n = vterm_screen_get_text(term->vts, buf, 1 << 13, extent);
-      buf[n] = '\0';
-      // printf("%d.%d -> %d.%d %sT\n", extent.start_row, extent.start_col,
-      // extent.end_row, extent.end_col, buf);
-    }
     for (int j = 0; j < end_col; ) {
       fetch_cell(term, i, j, &cell);
       // insert(env, emacs_text(env, term, (char *)buffer, len, &cell));
