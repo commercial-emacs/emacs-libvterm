@@ -272,65 +272,42 @@ static void goto_col(Term *term, emacs_env *env, int row, int end_col) {
 
 static emacs_value render_text(emacs_env *env, Term *term, char *buffer,
                                int len, VTermScreenCell *cell) {
-  emacs_value text;
-  if (len == 0) {
-    text = env->make_string(env, "", 0);
-    return text;
-  } else {
-    text = env->make_string(env, buffer, len);
-  }
-
+  emacs_value text = env->make_string(env, buffer, len);
   emacs_value fg = cell_rgb_color(env, term, cell, true);
   emacs_value bg = cell_rgb_color(env, term, cell, false);
-  /* With vterm-disable-bold-font, vterm-disable-underline,
-   * vterm-disable-inverse-video, users can disable some text properties.
-   * Here, we check whether the text would require adding such properties.
-   * In case it does, and the user does not disable the attribute, we later
-   * append the property to the list props.  If the text does not require
-   * such property, or the user disable it, we set the variable to nil.
-   * Properties that are marked as nil are not added to the text. */
-  emacs_value bold =
-      cell->attrs.bold && !term->disable_bold_font ? Qbold : Qnil;
-  emacs_value underline =
-      cell->attrs.underline && !term->disable_underline ? Qt : Qnil;
   emacs_value italic = cell->attrs.italic ? Qitalic : Qnil;
-  emacs_value reverse =
-      cell->attrs.reverse && !term->disable_inverse_video ? Qt : Qnil;
   emacs_value strike = cell->attrs.strike ? Qt : Qnil;
 
-  // TODO: Blink, font, dwl, dhl is missing
-  int emacs_major_version =
-      env->extract_integer(env, symbol_value(env, Qemacs_major_version));
-  emacs_value properties;
+  /* Some attrs have user-level disablers.  */
+  emacs_value bold = cell->attrs.bold && !term->disable_bold_font ? Qbold : Qnil;
+  emacs_value underline = cell->attrs.underline && !term->disable_underline ? Qt : Qnil;
+  emacs_value reverse = cell->attrs.reverse && !term->disable_inverse_video ? Qt : Qnil;
+
   emacs_value props[64];
-  int props_len = 0;
+  unsigned char nprops = 0;
+  props[nprops++] = Qextend, props[nprops++] = Qt;
   if (env->is_not_nil(env, fg))
-    props[props_len++] = Qforeground, props[props_len++] = fg;
+    props[nprops++] = Qforeground, props[nprops++] = fg;
   if (env->is_not_nil(env, bg))
-    props[props_len++] = Qbackground, props[props_len++] = bg;
+    props[nprops++] = Qbackground, props[nprops++] = bg;
   if (bold != Qnil)
-    props[props_len++] = Qweight, props[props_len++] = bold;
+    props[nprops++] = Qweight, props[nprops++] = bold;
   if (underline != Qnil)
-    props[props_len++] = Qunderline, props[props_len++] = underline;
+    props[nprops++] = Qunderline, props[nprops++] = underline;
   if (italic != Qnil)
-    props[props_len++] = Qslant, props[props_len++] = italic;
+    props[nprops++] = Qslant, props[nprops++] = italic;
   if (reverse != Qnil)
-    props[props_len++] = Qreverse, props[props_len++] = reverse;
+    props[nprops++] = Qreverse, props[nprops++] = reverse;
   if (strike != Qnil)
-    props[props_len++] = Qstrike, props[props_len++] = strike;
-  if (emacs_major_version >= 27)
-    props[props_len++] = Qextend, props[props_len++] = Qt;
+    props[nprops++] = Qstrike, props[nprops++] = strike;
 
-  properties = list(env, props, props_len);
-
-  if (props_len)
-    put_text_property(env, text, Qface, properties);
-
+  put_text_property(env, text, Qface, list(env, props, nprops));
   return text;
 }
 
-static bool cluster_p(VTermScreenCell *a, VTermScreenCell *b) {
-  return vterm_color_is_equal(&a->fg, &b->fg)
+static bool same_chunk(VTermScreenCell *a, VTermScreenCell *b) {
+  return a->width == b->width
+    && vterm_color_is_equal(&a->fg, &b->fg)
     && vterm_color_is_equal(&a->bg, &b->bg)
     && 0 == memcmp(&a->attrs, &b->attrs, sizeof(b->attrs));
 }
@@ -350,18 +327,15 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       buffer = realloc(buffer, buffer_n);
     }
 
-  VTermScreenCell prev_cell = (VTermScreenCell){.width = 0};
+  VTermScreenCell prev_cell = (VTermScreenCell){0};
   for (int i = start_row; i < end_row; ++i) {
     for (int j = 0; j < end_col; ) {
       VTermScreenCell cell;
       fetch_cell(term, i, j, &cell);
-      if (prev_cell.width && !cluster_p(&cell, &prev_cell)) {
+      if (!same_chunk(&cell, &prev_cell)) {
         insert(env, render_text(env, term, buffer, len, &prev_cell));
         len = 0;
       }
-
-      // insert(env, emacs_text(env, term, (char *)buffer, len, &cell));
-      // len = 0;
       if (cell.chars[0] == '\0') {
 	if (is_eol(term, end_col, i, j)) {
 	  buffer[len++] = '\n';
@@ -381,11 +355,10 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       prev_cell = cell;
     }
     if (buffer[len-1] != '\n') {
-      /* We don't know if j==endcol is a bonafide ncurses line feed in
-	 which case, we insert a newline, or a soft wrap, in which
-	 case we don't. */
-      buffer[len++] = '\n';
-      // insert(env, emacs_text(env, term, (char *)bytes, 1, &cell));
+      const VTermLineInfo *lineinfo =
+	vterm_state_get_lineinfo(vterm_obtain_state(term->vt), i+1);
+      if (!lineinfo || !lineinfo->continuation) /* not a softwrap */
+	buffer[len++] = '\n';
     }
   }
   insert(env, emacs_text(env, term, (char *)buffer, len, &prev_cell));

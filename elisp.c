@@ -129,20 +129,19 @@ void forward_line(emacs_env *env, int n) {
   emacs_value nline = env->make_integer(env, n);
   env->funcall(env, Fforward_line, 1, (emacs_value[]){nline});
 }
+
 void goto_line(emacs_env *env, int n) {
   emacs_value nline = env->make_integer(env, n);
   env->funcall(env, Fgoto_line, 1, (emacs_value[]){nline});
 }
+
 void delete_lines(emacs_env *env, int linenum, int count, bool del_whole_line) {
   emacs_value Qlinenum = env->make_integer(env, linenum);
   emacs_value Qcount = env->make_integer(env, count);
-  if (del_whole_line) {
-    env->funcall(env, Fdelete_lines, 3, (emacs_value[]){Qlinenum, Qcount, Qt});
-  } else {
-    env->funcall(env, Fdelete_lines, 3,
-                 (emacs_value[]){Qlinenum, Qcount, Qnil});
-  }
+  env->funcall(env, Fdelete_lines, 3,
+	       (emacs_value[]){Qlinenum, Qcount, del_whole_line ? Qt : Qnil});
 }
+
 void recenter(emacs_env *env, emacs_value pos) {
   env->funcall(env, Frecenter, 1, (emacs_value[]){pos});
 }
