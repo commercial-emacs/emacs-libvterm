@@ -45,7 +45,6 @@ emacs_value Fpoint;
 emacs_value Fapply;
 
 emacs_value Fput_text_property;
-emacs_value Fadd_text_properties;
 emacs_value Fset;
 emacs_value Fvterm__flush_output;
 emacs_value Fget_buffer_window_list;
@@ -96,22 +95,15 @@ emacs_value nth(emacs_env *env, int idx, emacs_value list) {
   return env->funcall(env, Fnth, 2, (emacs_value[]){eidx, list});
 }
 
-void put_text_property(emacs_env *env, emacs_value string, emacs_value property,
-                       emacs_value value) {
-  emacs_value start = env->make_integer(env, 0);
-  emacs_value end = length(env, string);
-
-  env->funcall(env, Fput_text_property, 5,
-               (emacs_value[]){start, end, property, value, string});
-}
-
-void add_text_properties(emacs_env *env, emacs_value string,
-                         emacs_value properties) {
-  emacs_value start = env->make_integer(env, 0);
-  emacs_value end = length(env, string);
-
-  env->funcall(env, Fadd_text_properties, 4,
-               (emacs_value[]){start, end, properties, string});
+void put_text_property(emacs_env *env, emacs_value string, size_t start, size_t end,
+		       emacs_value property, emacs_value value) {
+  intmax_t calc_end = env->extract_integer(env, length(env, string));
+  if (start < calc_end) {
+    env->funcall(env, Fput_text_property, 5,
+		 (emacs_value[]){env->make_integer(env, start),
+				 env->make_integer(env, calc_end < end ? calc_end : end),
+				 property, value, string});
+  }
 }
 
 void erase_buffer(emacs_env *env) { env->funcall(env, Ferase_buffer, 0, NULL); }

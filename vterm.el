@@ -272,7 +272,7 @@ not require any shell-side configuration. See
   :group 'vterm)
 
 (make-obsolete 'vterm-bookmark-check-dir nil "31.1")
-(defvar-local vterm-restore-cursor-type nil)
+(defvar-local vterm--exit-copy-mode-function nil)
 
 (defface vterm-color-black
   `((t :inherit term-color-black))
@@ -408,9 +408,6 @@ Only background is used."
   "Shell process of current term.")
 
 (defvar-local vterm--prompt-tracking-enabled-p nil)
-(defvar-local vterm--insert-function (symbol-function #'insert))
-(defvar-local vterm--delete-char-function (symbol-function #'delete-char))
-(defvar-local vterm--delete-region-function (symbol-function #'delete-region))
 (defvar-local vterm--undecoded-bytes nil)
 
 (defmacro vterm-define-key (key)
@@ -549,8 +546,6 @@ Exceptions are defined by `vterm-keymap-exceptions'."
     (define-key map [return]               #'vterm-copy-mode-done)
     (define-key map (kbd "RET")            #'vterm-copy-mode-done)
     (define-key map (kbd "C-c C-r")        #'vterm-reset-cursor-point)
-    (define-key map (kbd "C-a")            #'vterm-beginning-of-line)
-    (define-key map (kbd "C-e")            #'vterm-end-of-line)
     (define-key map (kbd "C-c C-n")        #'vterm-next-prompt)
     (define-key map (kbd "C-c C-p")        #'vterm-previous-prompt)
     map))
@@ -701,15 +696,30 @@ for, or t to get the default shell for all methods."
 (defun vterm--enter-copy-mode ()
   (use-local-map nil)
   (vterm-send-stop)
-  (setq-local vterm-restore-cursor-type cursor-type
-              cursor-type t))
+  (setq-local truncate-lines nil
+              cursor-type t)
+  (let ((line-wraps (vterm--line-wraps))
+        (inhibit-read-only t))
+    (setq-local vterm--exit-copy-mode-function
+                (apply-partially #'vterm--exit-copy-mode
+                                 cursor-type line-wraps))
+    (mapc (lambda (cell)
+            (delete-region (car cell)
+                           (+ (car cell) (length (cdr cell)))))
+          (sort line-wraps (lambda (a b) (> (car a) (car b)))))))
 
-(defun vterm--exit-copy-mode ()
-  (setq-local cursor-type vterm-restore-cursor-type
-              vterm-restore-cursor-type nil)
+(defun vterm--exit-copy-mode (cursor-type* line-wraps)
+  (setq-local cursor-type cursor-type*
+              truncate-lines t)
+  (let ((inhibit-read-only t))
+    (mapc (lambda (cell)
+            (save-excursion (goto-char (car cell))
+                            (insert (cdr cell))))
+          (sort line-wraps (lambda (a b) (< (car a) (car b))))))
   (vterm-reset-cursor-point)
   (use-local-map vterm-mode-map)
-  (vterm-send-start))
+  (vterm-send-start)
+  (setq-local vterm--exit-copy-mode-function nil))
 
 (define-minor-mode vterm-copy-mode
   "Toggle `vterm-copy-mode'.
@@ -729,7 +739,8 @@ A conventient way to exit `vterm-copy-mode' is with
           (derived-mode-p 'vterm-mode))
       (if vterm-copy-mode
           (vterm--enter-copy-mode)
-        (vterm--exit-copy-mode))
+        (when vterm--exit-copy-mode-function
+          (funcall vterm--exit-copy-mode-function)))
     (user-error "You cannot enable vterm-copy-mode outside vterm buffers")))
 
 (defun vterm-copy-mode-done (arg)
@@ -744,14 +755,14 @@ will invert `vterm-copy-exclude-prompt' for that call."
   (interactive "P")
   (when vterm-copy-mode
     (unless (use-region-p)
-      (goto-char (vterm--get-beginning-of-line))
+      (beginning-of-line)
       ;; Are we excluding the prompt?
       (if (or (and vterm-copy-exclude-prompt (not arg))
               (and (not vterm-copy-exclude-prompt) arg))
           (goto-char (max (or (vterm--get-prompt-point) 0)
-                          (vterm--get-beginning-of-line))))
+                          (line-beginning-position))))
       (set-mark (point))
-      (goto-char (vterm--get-end-of-line)))
+      (end-of-line))
     (kill-ring-save (region-beginning) (region-end))
     (vterm-copy-mode -1)))
 
@@ -987,21 +998,6 @@ Provide similar behavior as `insert' for vterm."
     (vterm--update vterm--term "<end_paste>")
     (accept-process-output vterm--process nil nil t)))
 
-(defun vterm-delete-region (start end)
-  "Delete the text between START and END for vterm. "
-  (when vterm--term
-    (save-excursion
-      (when (get-text-property start 'vterm-line-wrap)
-        ;; skip over the fake newline when start there.
-        (setq start (1+ start))))
-    ;; count of chars after fake newline removed
-    (let ((count (length (filter-buffer-substring start end))))
-      (if (vterm-goto-char start)
-          (cl-loop repeat count do
-                   (vterm-send-key "<delete>" nil nil nil t))
-        (let ((inhibit-read-only nil))
-          (vterm--delete-region start end))))))
-
 (defun vterm-goto-char (pos)
   "Set point to POSITION for vterm.
 
@@ -1045,8 +1041,6 @@ the return value is `t' when cursor moved."
       nil)
      (t nil))))
 
-
-
 (defun vterm--backward-char ()
   "Move point N characters backward.
 
@@ -1067,18 +1061,6 @@ Return count of moved characeters."
       (dotimes (_ 3) (vterm-send-key "<backspace>" nil nil nil t)) ;;delete  "^[[D"
       nil)
      (t nil))))
-
-(defun vterm--delete-region(start end)
-  "A wrapper for `delete-region'."
-  (funcall vterm--delete-region-function start end))
-
-(defun vterm--insert(&rest content)
-  "A wrapper for `insert'."
-  (apply vterm--insert-function content))
-
-(defun vterm--delete-char(n &optional killflag)
-  "A wrapper for `delete-char'."
-  (funcall vterm--delete-char-function n killflag))
 
 (defun vterm--translate-event-to-args (event &optional meta)
   "Translate EVENT as list of args for `vterm-send-key'.
@@ -1312,9 +1294,9 @@ If option DELETE-WHOLE-LINE is non-nil, then this command kills
 the whole line including its terminating newline"
   (save-excursion
     (when (vterm--goto-line line-num)
-      (vterm--delete-region (point) (line-end-position count))
+      (delete-region (point) (line-end-position count))
       (when (and delete-whole-line (looking-at "\n"))
-        (vterm--delete-char 1)))))
+        (delete-char 1)))))
 
 (defun vterm--goto-line (n)
   "Move point to beginning of Nth line.
@@ -1449,38 +1431,13 @@ in README."
                    (when pt (goto-char (1- pt))))))
     (term-previous-prompt n)))
 
-(defun vterm--get-beginning-of-line (&optional pt)
-  "Find the start of the line, bypassing line wraps.
-If PT is specified, find it's beginning of the line instead of the beginning
-of the line at cursor."
-  (save-excursion
-    (when pt (goto-char pt))
-    (beginning-of-line)
-    (while (and (not (bobp))
-                (get-text-property (1- (point)) 'vterm-line-wrap))
-      (forward-char -1)
-      (beginning-of-line))
-    (point)))
-
-(defun vterm--get-end-of-line (&optional pt)
-  "Find the start of the line, bypassing line wraps.
-If PT is specified, find it's end of the line instead of the end
-of the line at cursor."
-  (save-excursion
-    (when pt (goto-char pt))
-    (end-of-line)
-    (while (get-text-property (point) 'vterm-line-wrap)
-      (forward-char)
-      (end-of-line))
-    (point)))
-
 ;; TODO: Improve doc string, it should not point to the readme but it should
 ;;       be self-contained.
 (defun vterm--get-prompt-point ()
   "Get the position of the end of current prompt.
 More information see `vterm--prompt-tracking-enabled-p' and
 `Directory tracking and Prompt tracking'in README."
-  (let ((end-point (vterm--get-end-of-line))
+  (let ((end-point (line-end-position))
         prompt-point)
     (save-excursion
       (if (and vterm-use-vterm-prompt-detection-method
@@ -1492,7 +1449,7 @@ More information see `vterm--prompt-tracking-enabled-p' and
         (goto-char end-point)
         (if (search-backward-regexp term-prompt-regexp nil t)
             (goto-char (match-end 0))
-          (vterm--get-beginning-of-line))))))
+          (line-beginning-position))))))
 
 (defun vterm--at-prompt-p ()
   "Return t if the cursor position is at shell prompt."
@@ -1506,29 +1463,24 @@ More information see `vterm--prompt-tracking-enabled-p' and
                (current (save-excursion (vterm-reset-cursor-point))))
       (<= promp-pt (or pt current)))))
 
-(defun vterm-beginning-of-line ()
-  "Move point to the beginning of the line.
-
-Move the point to the first character after the shell prompt on this line.
-If the point is already there, move to the beginning of the line.
-Effectively toggle between the two positions."
-  (interactive "^")
-  (if (vterm--at-prompt-p)
-      (goto-char (vterm--get-beginning-of-line))
-    (goto-char (max (or (vterm--get-prompt-point) 0)
-                    (vterm--get-beginning-of-line)))))
-
-(defun vterm-end-of-line ()
-  "Move point to the end of the line, bypassing line wraps."
-  (interactive "^")
-  (goto-char (vterm--get-end-of-line)))
-
 (defun vterm-reset-cursor-point ()
   "Interactivise `vterm--reset-cursor-point'."
   (interactive)
   (when vterm--term
     (let ((inhibit-read-only t))
       (vterm--reset-cursor-point vterm--term))))
+
+(defun vterm--line-wraps ()
+  "Return list of conses (POS . STRING)."
+  (save-excursion
+    (goto-char (point-min))
+    (let (result match)
+      (while (setq match (text-property-search-forward 'vterm-line-wrap t t))
+        (push (cons (prop-match-beginning match)
+                    (buffer-substring (prop-match-beginning match)
+                                      (prop-match-end match)))
+              result))
+      result)))
 
 (provide 'vterm)
 ;; Local Variables:

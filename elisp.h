@@ -48,7 +48,6 @@ extern emacs_value Fwindow_body_height;
 extern emacs_value Fpoint;
 
 extern emacs_value Fput_text_property;
-extern emacs_value Fadd_text_properties;
 extern emacs_value Fset;
 extern emacs_value Fvterm__flush_output;
 extern emacs_value Fget_buffer_window_list;
@@ -68,10 +67,8 @@ int string_bytes(emacs_env *env, emacs_value string);
 emacs_value length(emacs_env *env, emacs_value string);
 emacs_value list(emacs_env *env, emacs_value elements[], ptrdiff_t len);
 emacs_value nth(emacs_env *env, int idx, emacs_value list);
-void put_text_property(emacs_env *env, emacs_value string, emacs_value property,
-                       emacs_value value);
-void add_text_properties(emacs_env *env, emacs_value string,
-                         emacs_value property);
+void put_text_property(emacs_env *env, emacs_value string, size_t start, size_t end,
+		       emacs_value property, emacs_value value);
 void erase_buffer(emacs_env *env);
 void insert(emacs_env *env, emacs_value string);
 void goto_char(emacs_env *env, int pos);

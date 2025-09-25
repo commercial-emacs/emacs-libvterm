@@ -8,6 +8,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <vterm.h>
+#include <assert.h>
 #include <sys/gmon.h>
 
 extern void moncontrol (int mode);
@@ -277,33 +278,76 @@ static bool same_chunk(VTermScreenCell *a, VTermScreenCell *b) {
     && 0 == memcmp(&a->attrs, &b->attrs, sizeof(b->attrs));
 }
 
+static emacs_value emacs_text(emacs_env *env, Term *term, char *buffer, size_t len,
+			      size_t *linewrap_indices, size_t len_indices,
+			      VTermScreenCell *cell) {
+  emacs_value text = env->make_string(env, buffer, len);
+
+  emacs_value fg = cell_rgb_color(env, term, cell, true);
+  emacs_value bg = cell_rgb_color(env, term, cell, false);
+  emacs_value italic = cell->attrs.italic ? Qitalic : Qnil;
+  emacs_value strike = cell->attrs.strike ? Qt : Qnil;
+
+  /* Some attrs have user-level disablers.  */
+  emacs_value bold = cell->attrs.bold && !term->disable_bold_font ? Qbold : Qnil;
+  emacs_value underline = cell->attrs.underline && !term->disable_underline ? Qt : Qnil;
+  emacs_value reverse = cell->attrs.reverse && !term->disable_inverse_video ? Qt : Qnil;
+
+  emacs_value props[64];
+  unsigned char nprops = 0;
+  props[nprops++] = Qextend, props[nprops++] = Qt;
+  if (env->is_not_nil(env, fg))
+    props[nprops++] = Qforeground, props[nprops++] = fg;
+  if (env->is_not_nil(env, bg))
+    props[nprops++] = Qbackground, props[nprops++] = bg;
+  if (bold != Qnil)
+    props[nprops++] = Qweight, props[nprops++] = bold;
+  if (underline != Qnil)
+    props[nprops++] = Qunderline, props[nprops++] = underline;
+  if (italic != Qnil)
+    props[nprops++] = Qslant, props[nprops++] = italic;
+  if (reverse != Qnil)
+    props[nprops++] = Qreverse, props[nprops++] = reverse;
+  if (strike != Qnil)
+    props[nprops++] = Qstrike, props[nprops++] = strike;
+
+  if (len) {
+    put_text_property(env, text, 0, len, Qface, list(env, props, nprops));
+    for (int i=0; i<len_indices; ++i) {
+      size_t index = linewrap_indices[i];
+      put_text_property(env, text, index, index+1, Qvterm_line_wrap, Qt);
+      put_text_property(env, text, index, index+1, Qrear_nonsticky, Qt);
+    }
+  }
+  return text;
+}
+
 /* Bro deftly combined vterm_screen_{get_text,get_attrs_extent} and
    into a single loop.  The logic in _get_chars() was replicated here,
    jankily.  */
 static void refresh_lines(Term *term, emacs_env *env, int start_row,
                           int end_row, int end_col) {
-  static char *buffer = NULL;
-  static size_t buffer_n = 0;
-  static size_t linewrap_indices[1024];
+#define BUFZ 8192
+#define WRAPZ 64
+  char buffer[BUFZ];
+  size_t linewrap_indices[WRAPZ];
+  size_t len = 0, len_indices = 0, padright = 0;
+  const size_t max_rowlen = end_col * VTERM_MAX_CHARS_PER_CELL * 4;
+  if (max_rowlen > BUFZ)
+    return; /* silently avoid a segv */
 
-  size_t len = 0, len_indices = 0;
-  const size_t max_len = (end_row - start_row + 1) * end_col
-    * VTERM_MAX_CHARS_PER_CELL * 4 * sizeof(char);
-
-  if (max_len > buffer_n)
-    {
-      buffer_n = max_len + 1024;
-      buffer = realloc(buffer, buffer_n); /* never free'd */
-    }
-
-  size_t padright = 0;
   VTermScreenCell prev_cell = (VTermScreenCell){0};
   for (int i = start_row; i < end_row; ++i) {
+    if (max_rowlen > (BUFZ - len) || len_indices > WRAPZ) {
+      insert(env, emacs_text(env, term, buffer, len, linewrap_indices,
+			     len_indices, &prev_cell));
+      len = 0;
+      len_indices = 0;
+    }
     for (int j = 0; j < end_col; ) {
       VTermScreenCell cell;
       fetch_cell(term, i, j, &cell);
-      if (len_indices > 1024 ||
-	  !same_chunk(&cell, &prev_cell)) {
+      if (!same_chunk(&cell, &prev_cell)) {
         insert(env, emacs_text(env, term, buffer, len, linewrap_indices,
 			       len_indices, &prev_cell));
         len = 0;
@@ -333,12 +377,15 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       j += cell.width;
       prev_cell = cell;
     }
-    buffer[len++] = '\n';
-    if (padright)
+    if (!padright) /* Line ended on a proper character */
       linewrap_indices[len_indices++] = len;
+    buffer[len++] = '\n';
     padright = 0;
   }
-  insert(env, emacs_text(env, term, (char *)buffer, len, &prev_cell));
+  insert(env, emacs_text(env, term, buffer, len, linewrap_indices,
+			 len_indices, &prev_cell));
+#undef BUFZ
+#undef WRAPZ
 }
 
 // Refresh the screen (visible part of the buffer when the terminal is
@@ -695,46 +742,6 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *user_data) {
   }
 
   return 1;
-}
-
-static emacs_value emacs_text(emacs_env *env, Term *term, char *buffer,
-			      int *softs, int len, VTermScreenCell *cell) {
-  emacs_value text = env->make_string(env, buffer, len);
-  emacs_value fg = cell_rgb_color(env, term, cell, true);
-  emacs_value bg = cell_rgb_color(env, term, cell, false);
-  emacs_value italic = cell->attrs.italic ? Qitalic : Qnil;
-  emacs_value strike = cell->attrs.strike ? Qt : Qnil;
-
-  /* Some attrs have user-level disablers.  */
-  emacs_value bold = cell->attrs.bold && !term->disable_bold_font ? Qbold : Qnil;
-  emacs_value underline = cell->attrs.underline && !term->disable_underline ? Qt : Qnil;
-  emacs_value reverse = cell->attrs.reverse && !term->disable_inverse_video ? Qt : Qnil;
-
-  emacs_value props[64];
-  unsigned char nprops = 0;
-  props[nprops++] = Qextend, props[nprops++] = Qt;
-  if (env->is_not_nil(env, fg))
-    props[nprops++] = Qforeground, props[nprops++] = fg;
-  if (env->is_not_nil(env, bg))
-    props[nprops++] = Qbackground, props[nprops++] = bg;
-  if (bold != Qnil)
-    props[nprops++] = Qweight, props[nprops++] = bold;
-  if (underline != Qnil)
-    props[nprops++] = Qunderline, props[nprops++] = underline;
-  if (italic != Qnil)
-    props[nprops++] = Qslant, props[nprops++] = italic;
-  if (reverse != Qnil)
-    props[nprops++] = Qreverse, props[nprops++] = reverse;
-  if (strike != Qnil)
-    props[nprops++] = Qstrike, props[nprops++] = strike;
-
-  put_text_property(env, text, Qface, list(env, props, nprops));
-
-  add_text_properties(env, text, list(env, (emacs_value[]){
-	Qvterm_line_wrap, Qt, Qrear_nonsticky, Qt
-      }, 4));
-
-  return text;
 }
 
 static emacs_value cell_rgb_color(emacs_env *env, Term *term,
@@ -1360,12 +1367,10 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Flist = env->make_global_ref(env, env->intern(env, "list"));
   Fnth = env->make_global_ref(env, env->intern(env, "nth"));
   Ferase_buffer = env->make_global_ref(env, env->intern(env, "erase-buffer"));
-  Finsert = env->make_global_ref(env, env->intern(env, "vterm--insert"));
+  Finsert = env->make_global_ref(env, env->intern(env, "insert"));
   Fgoto_char = env->make_global_ref(env, env->intern(env, "goto-char"));
   Fput_text_property =
       env->make_global_ref(env, env->intern(env, "put-text-property"));
-  Fadd_text_properties =
-      env->make_global_ref(env, env->intern(env, "add-text-properties"));
   Fset = env->make_global_ref(env, env->intern(env, "set"));
   Fvterm__flush_output =
       env->make_global_ref(env, env->intern(env, "vterm--flush-output"));
