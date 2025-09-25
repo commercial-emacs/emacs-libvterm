@@ -270,41 +270,6 @@ static void goto_col(Term *term, emacs_env *env, int row, int end_col) {
     insert(env, space);
 }
 
-static emacs_value render_text(emacs_env *env, Term *term, char *buffer,
-                               int len, VTermScreenCell *cell) {
-  emacs_value text = env->make_string(env, buffer, len);
-  emacs_value fg = cell_rgb_color(env, term, cell, true);
-  emacs_value bg = cell_rgb_color(env, term, cell, false);
-  emacs_value italic = cell->attrs.italic ? Qitalic : Qnil;
-  emacs_value strike = cell->attrs.strike ? Qt : Qnil;
-
-  /* Some attrs have user-level disablers.  */
-  emacs_value bold = cell->attrs.bold && !term->disable_bold_font ? Qbold : Qnil;
-  emacs_value underline = cell->attrs.underline && !term->disable_underline ? Qt : Qnil;
-  emacs_value reverse = cell->attrs.reverse && !term->disable_inverse_video ? Qt : Qnil;
-
-  emacs_value props[64];
-  unsigned char nprops = 0;
-  props[nprops++] = Qextend, props[nprops++] = Qt;
-  if (env->is_not_nil(env, fg))
-    props[nprops++] = Qforeground, props[nprops++] = fg;
-  if (env->is_not_nil(env, bg))
-    props[nprops++] = Qbackground, props[nprops++] = bg;
-  if (bold != Qnil)
-    props[nprops++] = Qweight, props[nprops++] = bold;
-  if (underline != Qnil)
-    props[nprops++] = Qunderline, props[nprops++] = underline;
-  if (italic != Qnil)
-    props[nprops++] = Qslant, props[nprops++] = italic;
-  if (reverse != Qnil)
-    props[nprops++] = Qreverse, props[nprops++] = reverse;
-  if (strike != Qnil)
-    props[nprops++] = Qstrike, props[nprops++] = strike;
-
-  put_text_property(env, text, Qface, list(env, props, nprops));
-  return text;
-}
-
 static bool same_chunk(VTermScreenCell *a, VTermScreenCell *b) {
   return a->width == b->width
     && vterm_color_is_equal(&a->fg, &b->fg)
@@ -319,8 +284,9 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
                           int end_row, int end_col) {
   static char *buffer = NULL;
   static size_t buffer_n = 0;
+  static size_t linewrap_indices[1024];
 
-  size_t len = 0;
+  size_t len = 0, len_indices = 0;
   const size_t max_len = (end_row - start_row + 1) * end_col
     * VTERM_MAX_CHARS_PER_CELL * 4 * sizeof(char);
 
@@ -330,28 +296,31 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       buffer = realloc(buffer, buffer_n); /* never free'd */
     }
 
-  size_t padding = 0;
+  size_t padright = 0;
   VTermScreenCell prev_cell = (VTermScreenCell){0};
   for (int i = start_row; i < end_row; ++i) {
     for (int j = 0; j < end_col; ) {
       VTermScreenCell cell;
       fetch_cell(term, i, j, &cell);
-      if (!same_chunk(&cell, &prev_cell)) {
-        insert(env, render_text(env, term, buffer, len, &prev_cell));
+      if (len_indices > 1024 ||
+	  !same_chunk(&cell, &prev_cell)) {
+        insert(env, emacs_text(env, term, buffer, len, linewrap_indices,
+			       len_indices, &prev_cell));
         len = 0;
+	len_indices = 0;
       }
       switch (cell.chars[0]) {
       case 0:
 	// Erased cell, might need a space
-	++padding;
+	++padright;
 	break;
       case (uint32_t)-1:
 	// Gap behind a double-width char, do nothing
 	break;
       default:
-	while(padding) {
+	while(padright) {
 	  buffer[len++] = ' ';
-	  padding--;
+	  padright--;
 	}
 	for (int k = 0; k < VTERM_MAX_CHARS_PER_CELL && cell.chars[k]; ++k) {
 	  unsigned char bytes[4] = {'\0'};
@@ -364,13 +333,10 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       j += cell.width;
       prev_cell = cell;
     }
-    const VTermLineInfo *lineinfo =
-      vterm_state_get_lineinfo(vterm_obtain_state(term->vt), i+1);
-    if (!lineinfo || !lineinfo->continuation) {
-      /* not a softwrap */
-      buffer[len++] = '\n';
-      padding = 0;
-    }
+    buffer[len++] = '\n';
+    if (padright)
+      linewrap_indices[len_indices++] = len;
+    padright = 0;
   }
   insert(env, emacs_text(env, term, (char *)buffer, len, &prev_cell));
 }
@@ -732,65 +698,42 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *user_data) {
 }
 
 static emacs_value emacs_text(emacs_env *env, Term *term, char *buffer,
-			      int len, const VTermScreenCell *cell) {
-  if (len == 0)
-    return env->make_string(env, "", 0);
-
+			      int *softs, int len, VTermScreenCell *cell) {
   emacs_value text = env->make_string(env, buffer, len);
   emacs_value fg = cell_rgb_color(env, term, cell, true);
   emacs_value bg = cell_rgb_color(env, term, cell, false);
-  /* With vterm-disable-bold-font, vterm-disable-underline,
-   * vterm-disable-inverse-video, users can disable some text properties.
-   * Here, we check whether the text would require adding such properties.
-   * In case it does, and the user does not disable the attribute, we later
-   * append the property to the list props.  If the text does not require
-   * such property, or the user disable it, we set the variable to nil.
-   * Properties that are marked as nil are not added to the text. */
-  emacs_value bold =
-      cell->attrs.bold && !term->disable_bold_font ? Qbold : Qnil;
-  emacs_value underline =
-      cell->attrs.underline && !term->disable_underline ? Qt : Qnil;
   emacs_value italic = cell->attrs.italic ? Qitalic : Qnil;
-  emacs_value reverse =
-      cell->attrs.reverse && !term->disable_inverse_video ? Qt : Qnil;
   emacs_value strike = cell->attrs.strike ? Qt : Qnil;
 
-  // TODO: Blink, font, dwl, dhl is missing
-  int emacs_major_version =
-      env->extract_integer(env, symbol_value(env, Qemacs_major_version));
-  emacs_value properties;
+  /* Some attrs have user-level disablers.  */
+  emacs_value bold = cell->attrs.bold && !term->disable_bold_font ? Qbold : Qnil;
+  emacs_value underline = cell->attrs.underline && !term->disable_underline ? Qt : Qnil;
+  emacs_value reverse = cell->attrs.reverse && !term->disable_inverse_video ? Qt : Qnil;
+
   emacs_value props[64];
-  int props_len = 0;
+  unsigned char nprops = 0;
+  props[nprops++] = Qextend, props[nprops++] = Qt;
   if (env->is_not_nil(env, fg))
-    props[props_len++] = Qforeground, props[props_len++] = fg;
+    props[nprops++] = Qforeground, props[nprops++] = fg;
   if (env->is_not_nil(env, bg))
-    props[props_len++] = Qbackground, props[props_len++] = bg;
+    props[nprops++] = Qbackground, props[nprops++] = bg;
   if (bold != Qnil)
-    props[props_len++] = Qweight, props[props_len++] = bold;
+    props[nprops++] = Qweight, props[nprops++] = bold;
   if (underline != Qnil)
-    props[props_len++] = Qunderline, props[props_len++] = underline;
+    props[nprops++] = Qunderline, props[nprops++] = underline;
   if (italic != Qnil)
-    props[props_len++] = Qslant, props[props_len++] = italic;
+    props[nprops++] = Qslant, props[nprops++] = italic;
   if (reverse != Qnil)
-    props[props_len++] = Qreverse, props[props_len++] = reverse;
+    props[nprops++] = Qreverse, props[nprops++] = reverse;
   if (strike != Qnil)
-    props[props_len++] = Qstrike, props[props_len++] = strike;
-  if (emacs_major_version >= 27)
-    props[props_len++] = Qextend, props[props_len++] = Qt;
+    props[nprops++] = Qstrike, props[nprops++] = strike;
 
-  properties = list(env, props, props_len);
+  put_text_property(env, text, Qface, list(env, props, nprops));
 
-  if (props_len)
-    put_text_property(env, text, Qface, properties);
+  add_text_properties(env, text, list(env, (emacs_value[]){
+	Qvterm_line_wrap, Qt, Qrear_nonsticky, Qt
+      }, 4));
 
-  return text;
-}
-
-static emacs_value render_fake_newline(emacs_env *env, Term *term) {
-  emacs_value text = env->make_string(env, "\n", 1);
-  emacs_value properties =
-    list(env, (emacs_value[]){Qvterm_line_wrap, Qt, Qrear_nonsticky, Qt}, 4);
-  add_text_properties(env, text, properties);
   return text;
 }
 
