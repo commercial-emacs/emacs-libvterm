@@ -312,6 +312,9 @@ static bool same_chunk(VTermScreenCell *a, VTermScreenCell *b) {
     && 0 == memcmp(&a->attrs, &b->attrs, sizeof(b->attrs));
 }
 
+/* Bro deftly combined vterm_screen_{get_text,get_attrs_extent} and
+   into a single loop.  The logic in _get_chars() was replicated here,
+   jankily.  */
 static void refresh_lines(Term *term, emacs_env *env, int start_row,
                           int end_row, int end_col) {
   static char *buffer = NULL;
@@ -324,9 +327,10 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
   if (max_len > buffer_n)
     {
       buffer_n = max_len + 1024;
-      buffer = realloc(buffer, buffer_n);
+      buffer = realloc(buffer, buffer_n); /* never free'd */
     }
 
+  size_t padding = 0;
   VTermScreenCell prev_cell = (VTermScreenCell){0};
   for (int i = start_row; i < end_row; ++i) {
     for (int j = 0; j < end_col; ) {
@@ -336,29 +340,36 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
         insert(env, render_text(env, term, buffer, len, &prev_cell));
         len = 0;
       }
-      if (cell.chars[0] == '\0') {
-	if (is_eol(term, end_col, i, j)) {
-	  buffer[len++] = '\n';
-	  break;
-	} else {
+      switch (cell.chars[0]) {
+      case 0:
+	// Erased cell, might need a space
+	++padding;
+	break;
+      case (uint32_t)-1:
+	// Gap behind a double-width char, do nothing
+	break;
+      default:
+	while(padding) {
 	  buffer[len++] = ' ';
+	  padding--;
 	}
-      } else {
 	for (int k = 0; k < VTERM_MAX_CHARS_PER_CELL && cell.chars[k]; ++k) {
 	  unsigned char bytes[4] = {'\0'};
 	  const size_t count = codepoint_to_utf8(cell.chars[k], bytes);
 	  snprintf(buffer + len, count + 1, "%s", (char *)bytes);
 	  len += count;
 	}
+	break;
       }
       j += cell.width;
       prev_cell = cell;
     }
-    if (buffer[len-1] != '\n') {
-      const VTermLineInfo *lineinfo =
-	vterm_state_get_lineinfo(vterm_obtain_state(term->vt), i+1);
-      if (!lineinfo || !lineinfo->continuation) /* not a softwrap */
-	buffer[len++] = '\n';
+    const VTermLineInfo *lineinfo =
+      vterm_state_get_lineinfo(vterm_obtain_state(term->vt), i+1);
+    if (!lineinfo || !lineinfo->continuation) {
+      /* not a softwrap */
+      buffer[len++] = '\n';
+      padding = 0;
     }
   }
   insert(env, emacs_text(env, term, (char *)buffer, len, &prev_cell));

@@ -589,7 +589,7 @@ Exceptions are defined by `vterm-keymap-exceptions'."
     (setq-local scroll-margin 0)
     (setq-local hscroll-margin 0)
     (setq-local hscroll-step 1)
-    (setq-local truncate-lines nil)
+    (setq-local truncate-lines t)
 
     ;; Disable all automatic fontification
     (setq-local font-lock-defaults '(nil t))
