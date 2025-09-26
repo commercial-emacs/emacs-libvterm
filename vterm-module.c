@@ -11,8 +11,6 @@
 #include <assert.h>
 #include <sys/gmon.h>
 
-extern void moncontrol (int mode);
-
 static LineInfo *alloc_lineinfo() {
   LineInfo *info = malloc(sizeof(LineInfo));
   info->directory = NULL;
@@ -1216,7 +1214,6 @@ emacs_value Fvterm__new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
 
 emacs_value Fvterm__update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
 			   void *data) {
-  moncontrol (1);
   Term *term = env->get_user_ptr(env, args[0]);
 
   // Process keys
@@ -1243,7 +1240,6 @@ emacs_value Fvterm__update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
     /* reset hscroll if (window-buffer (selected-window)) is term's. */
   }
 
-  moncontrol (0);
   return env->make_integer(env, 0);
 }
 

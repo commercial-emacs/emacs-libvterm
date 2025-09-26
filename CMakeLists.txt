@@ -67,8 +67,8 @@ target_include_directories(vterm INTERFACE ${LIBVTERM_INCLUDE_DIR})
 target_link_libraries(vterm-module PUBLIC vterm)
 
 # Add gprof profiling support
-target_compile_options(vterm-module PRIVATE -pg)
-target_link_options(vterm-module PRIVATE -pg)
+# target_compile_options(vterm-module PRIVATE -pg)
+# target_link_options(vterm-module PRIVATE -pg)
 
 # Custom run command for testing
 add_custom_target(run

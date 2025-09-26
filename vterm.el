@@ -102,7 +102,7 @@ the point up."
   :group 'vterm)
 
 (defcustom vterm-keymap-exceptions
-  '("C-c" "C-x" "C-u" "C-g" "C-h" "C-l" "M-x" "M-o" "C-y" "M-y")
+  '("C-c" "C-x" "C-u" "C-g" "C-h" "C-l" "M-x" "M-o" "C-y" "M-y" "M-:")
   "Exceptions for `vterm-keymap'.
 
 If you use a keybinding with a prefix-key, add that prefix-key to
@@ -696,13 +696,13 @@ for, or t to get the default shell for all methods."
 (defun vterm--enter-copy-mode ()
   (use-local-map nil)
   (vterm-send-stop)
-  (setq-local truncate-lines nil
-              cursor-type t)
   (let ((line-wraps (vterm--line-wraps))
         (inhibit-read-only t))
     (setq-local vterm--exit-copy-mode-function
                 (apply-partially #'vterm--exit-copy-mode
-                                 cursor-type line-wraps))
+                                 cursor-type line-wraps)
+                truncate-lines nil
+                cursor-type t)
     (mapc (lambda (cell)
             (delete-region (car cell)
                            (+ (car cell) (length (cdr cell)))))
