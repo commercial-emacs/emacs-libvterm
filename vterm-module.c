@@ -311,13 +311,13 @@ static emacs_value emacs_text(emacs_env *env, Term *term, char *buffer, size_t l
   if (strike != Qnil)
     props[nprops++] = Qstrike, props[nprops++] = strike;
 
-  if (len) {
-    put_text_property(env, text, 0, len, Qface, list(env, props, nprops));
-    for (int i=0; i<len_indices; ++i) {
-      size_t index = linewrap_indices[i];
-      put_text_property(env, text, index, index+1, Qvterm_line_wrap, Qt);
-      put_text_property(env, text, index, index+1, Qrear_nonsticky, Qt);
-    }
+  /* CALC_END < LEN when multibyte unicode. */
+  intmax_t calc_end = env->extract_integer(env, length(env, text));
+  put_text_property(env, text, 0, calc_end, Qface, list(env, props, nprops));
+  for (int i=0; i<len_indices; ++i) {
+    size_t index = linewrap_indices[i];
+    put_text_property(env, text, index, index+1, Qvterm_line_wrap, Qt);
+    put_text_property(env, text, index, index+1, Qrear_nonsticky, Qt);
   }
   return text;
 }
@@ -331,7 +331,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
 #define WRAPZ 64
   char buffer[BUFZ];
   size_t linewrap_indices[WRAPZ];
-  size_t len = 0, len_indices = 0, padright = 0;
+  size_t len = 0, len_indices = 0, cols = 0, padright = 0;
   const size_t max_rowlen = end_col * VTERM_MAX_CHARS_PER_CELL * 4;
   if (max_rowlen > BUFZ)
     return; /* silently avoid a segv */
@@ -343,6 +343,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
 			     len_indices, &prev_cell));
       len = 0;
       len_indices = 0;
+      cols = 0;
     }
     for (int j = 0; j < end_col; ) {
       VTermScreenCell cell;
@@ -352,6 +353,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
 			       len_indices, &prev_cell));
         len = 0;
 	len_indices = 0;
+	cols = 0;
       }
       switch (cell.chars[0]) {
       case 0:
@@ -364,7 +366,8 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
       default:
 	while(padright) {
 	  buffer[len++] = ' ';
-	  padright--;
+	  ++cols;
+	  --padright;
 	}
 	for (int k = 0; k < VTERM_MAX_CHARS_PER_CELL && cell.chars[k]; ++k) {
 	  unsigned char bytes[4] = {'\0'};
@@ -372,14 +375,19 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
 	  snprintf(buffer + len, count + 1, "%s", (char *)bytes);
 	  len += count;
 	}
+	++cols;
 	break;
       }
       j += cell.width;
       prev_cell = cell;
     }
-    if (!padright) /* Line ended on a proper character */
-      linewrap_indices[len_indices++] = len;
+    if (!padright)
+      /* Line ended on a proper character.  The index is COLS and
+	 not LEN (LEN > COLS when multibyte), since the inserted lisp
+	 string is unicode that's one-for-one with columns. */
+      linewrap_indices[len_indices++] = cols;
     buffer[len++] = '\n';
+    ++cols;
     padright = 0;
   }
   insert(env, emacs_text(env, term, buffer, len, linewrap_indices,

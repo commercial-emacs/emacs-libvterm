@@ -97,13 +97,10 @@ emacs_value nth(emacs_env *env, int idx, emacs_value list) {
 
 void put_text_property(emacs_env *env, emacs_value string, size_t start, size_t end,
 		       emacs_value property, emacs_value value) {
-  intmax_t calc_end = env->extract_integer(env, length(env, string));
-  if (start < calc_end) {
-    env->funcall(env, Fput_text_property, 5,
-		 (emacs_value[]){env->make_integer(env, start),
-				 env->make_integer(env, calc_end < end ? calc_end : end),
-				 property, value, string});
-  }
+  env->funcall(env, Fput_text_property, 5,
+	       (emacs_value[]){env->make_integer(env, start),
+			       env->make_integer(env, end),
+			       property, value, string});
 }
 
 void erase_buffer(emacs_env *env) { env->funcall(env, Ferase_buffer, 0, NULL); }
