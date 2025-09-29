@@ -1182,66 +1182,47 @@ value of `vterm-buffer-name'."
   "I/O Event.  Feeds PROCESS's INPUT to the virtual terminal.
 
 Then triggers a redraw from the module."
-  (let ((inhibit-redisplay t)
-        (inhibit-eol-conversion t)
-        (inhibit-read-only t)
-        (buf (process-buffer process))
-        (i 0)
-        (str-length (length input))
-        decoded-substring
-        funny)
-    (when (buffer-live-p buf)
-      (with-current-buffer buf
-        ;; borrowed from term.el
-        ;; Handle non-control data.  Decode the string before
-        ;; counting characters, to avoid garbling of certain
-        ;; multibyte characters (https://github.com/akermu/emacs-libvterm/issues/394).
-        ;; same bug of term.el https://debbugs.gnu.org/cgi/bugreport.cgi?bug=1006
-        (when vterm--undecoded-bytes
-          (setq input (concat vterm--undecoded-bytes input))
-          (setq vterm--undecoded-bytes nil)
-          (setq str-length (length input)))
-        (while (< i str-length)
-          (setq funny (string-match vterm-control-seq-regexp input i))
-          (let ((ctl-end (if funny (match-end 0)
-                           (setq funny (string-match vterm-control-seq-prefix-regexp input i))
-                           (if funny
-                               (setq vterm--undecoded-bytes
-                                     (substring input funny))
-                             (setq funny str-length))
-                           ;; The control sequence ends somewhere
-                           ;; past the end of this string.
-                           (1+ str-length))))
-            (when (> funny i)
-              ;; Handle non-control data.  Decode the string before
-              ;; counting characters, to avoid garbling of certain
-              ;; multibyte characters (emacs bug#1006).
-              (setq decoded-substring
-                    (decode-coding-string
-                     (substring input i funny)
-                     locale-coding-system t))
-              ;; Check for multibyte characters that ends
-              ;; before end of string, and save it for
-              ;; next time.
-              (when (= funny str-length)
-                (let ((partial 0)
-                      (count (length decoded-substring)))
-                  (while (and (< partial count)
-                              (eq (char-charset (aref decoded-substring
-                                                      (- count 1 partial)))
-                                  'eight-bit))
-                    (cl-incf partial))
-                  (when (> (1+ count) partial 0)
-                    (setq vterm--undecoded-bytes
-                          (substring decoded-substring (- partial)))
-                    (setq decoded-substring
-                          (substring decoded-substring 0 (- partial)))
-                    (cl-decf str-length partial)
-                    (cl-decf funny partial))))
-              (ignore-errors (vterm--write-input vterm--term decoded-substring))
-              (setq i funny))
-            (when (<= ctl-end str-length)
-              (ignore-errors (vterm--write-input vterm--term (substring input i ctl-end))))
+  (when (buffer-live-p (process-buffer process))
+    (with-current-buffer (process-buffer process)
+      (setq input (concat vterm--undecoded-bytes input)
+            vterm--undecoded-bytes nil)
+      (let* ((inhibit-redisplay t)
+             (inhibit-eol-conversion t)
+             (inhibit-read-only t)
+             (length (length input))
+             (i 0))
+        (while (< i length)
+          (let* ((ctl-beg (string-match vterm-control-seq-regexp input i))
+                 (ctl-end (if ctl-beg (match-end 0)
+                            (setq ctl-beg (string-match vterm-control-seq-prefix-regexp
+                                                        input i))
+                            (if ctl-beg
+                                (setq vterm--undecoded-bytes
+                                      (substring input ctl-beg))
+                              (setq ctl-beg length))
+                            (1+ length)))
+                 (decoded (decode-coding-string (substring input i ctl-beg)
+                                                locale-coding-system t)))
+            (when (= ctl-beg length)
+              ;; No control sequences; check for half-baked ones
+              (let ((partial 0)
+                    (decoded-length (length decoded)))
+                (while (and (< partial decoded-length)
+                            (eq (char-charset (aref decoded
+                                                    (- decoded-length 1 partial)))
+                                'eight-bit))
+                  (cl-incf partial))
+                ;; PARTIAL is a multibyte fragment at end of
+                ;; INPUT which we save for next time.
+                (when (> partial 0)
+                  (setq vterm--undecoded-bytes (substring decoded (- partial))
+                        decoded (substring decoded 0 (- partial)))
+                  (cl-decf length partial)
+                  (cl-decf ctl-beg partial))))
+            (ignore-errors (vterm--write-input vterm--term decoded))
+            (when (<= ctl-end length)
+              (ignore-errors (vterm--write-input
+                              vterm--term (substring input ctl-beg ctl-end))))
             (setq i ctl-end)))
         (vterm--update vterm--term)))))
 
