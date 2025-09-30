@@ -16,10 +16,11 @@ endif
 
 .PHONY: compile
 compile: vterm-module$(SOEXT)
-	$(EMACS) -batch -L . -L test \
+	$(EMACS) -batch \
 	  --eval "(setq byte-compile-error-on-warn t)" \
 	  --eval "(setq package-user-dir \"$(CURDIR)/deps\")" \
 	  -f package-initialize \
+	  -L . -L test \
 	  -f batch-byte-compile $(ELSRC) $(TESTSRC); \
 	  (ret=$$? ; rm -f $(ELSRC:.el=.elc) $(TESTSRC:.el=.elc) && exit $$ret)
 
