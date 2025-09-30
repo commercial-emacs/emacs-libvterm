@@ -781,15 +781,14 @@ will invert `vterm-copy-exclude-prompt' for that call."
                   last-command-event))
       (apply #'vterm-send-key key))))
 
-(defun vterm-send-key (key &optional shift meta ctrl accept-proc-output)
+(defun vterm-send-key (key &optional shift meta ctrl)
   "Send KEY to libvterm with optional modifiers SHIFT, META and CTRL."
   (deactivate-mark)
   (when vterm--term
     (let ((inhibit-redisplay t)
           (inhibit-read-only t))
       (vterm--update vterm--term key shift meta ctrl)
-      (when accept-proc-output
-        (accept-process-output vterm--process nil nil t)))))
+      (accept-process-output vterm--process 0.05 nil t))))
 
 (defun vterm-send (key)
   "Send KEY to libvterm.  KEY can be anything `kbd' understands."
@@ -982,7 +981,7 @@ Optional argument PASTE-P paste-p."
       (vterm--update vterm--term (char-to-string char)))
     (when paste-p
       (vterm--update vterm--term "<end_paste>")))
-  (accept-process-output vterm--process nil nil t))
+  (accept-process-output vterm--process 0.05 nil t))
 
 (defun vterm-insert (&rest contents)
   "Insert the arguments, either strings or characters, at point.
@@ -996,7 +995,7 @@ Provide similar behavior as `insert' for vterm."
         (dolist (char (string-to-list c))
           (vterm--update vterm--term (char-to-string char)))))
     (vterm--update vterm--term "<end_paste>")
-    (accept-process-output vterm--process nil nil t)))
+    (accept-process-output vterm--process 0.05 nil t)))
 
 (defun vterm-goto-char (pos)
   "Set point to POSITION for vterm.
@@ -1025,7 +1024,7 @@ The return value is `t' when point moved successfully."
 the return value is `t' when cursor moved."
   (vterm-reset-cursor-point)
   (let ((pt (point)))
-    (vterm-send-key "<right>" nil nil nil t)
+    (vterm-send-key "<right>" nil nil nil)
     (cond
      ((= (point) (1+ pt)) t)
      ((and (> (point) pt)
@@ -1034,10 +1033,10 @@ the return value is `t' when cursor moved."
       t)
      ((and (= (point) (+ 4 pt))
            (looking-back (regexp-quote "^[[C") nil)) ;escape code for <right>
-      (dotimes (_ 3) (vterm-send-key "<backspace>" nil nil nil t)) ;;delete  "^[[C"
+      (dotimes (_ 3) (vterm-send-key "<backspace>" nil nil nil)) ;;delete  "^[[C"
       nil)
      ((> (point) (1+ pt))             ;auto suggest
-      (vterm-send-key "_" nil nil t t) ;undo C-_
+      (vterm-send-key "_" nil nil t) ;undo C-_
       nil)
      (t nil))))
 
@@ -1047,7 +1046,7 @@ the return value is `t' when cursor moved."
 Return count of moved characeters."
   (vterm-reset-cursor-point)
   (let ((pt (point)))
-    (vterm-send-key "<left>" nil nil nil t)
+    (vterm-send-key "<left>" nil nil nil)
     (cond
      ((= (point) (1- pt)) t)
      ((and (= (point) (- pt 2))
@@ -1058,7 +1057,7 @@ Return count of moved characeters."
       t)
      ((and (= (point) (+ 4 pt))
            (looking-back (regexp-quote "^[[D") nil)) ;escape code for <left>
-      (dotimes (_ 3) (vterm-send-key "<backspace>" nil nil nil t)) ;;delete  "^[[D"
+      (dotimes (_ 3) (vterm-send-key "<backspace>" nil nil nil)) ;;delete  "^[[D"
       nil)
      (t nil))))
 
