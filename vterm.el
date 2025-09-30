@@ -1177,19 +1177,22 @@ value of `vterm-buffer-name'."
 (defconst vterm-control-seq-prefix-regexp
   "[\032\e]")
 
-(defun vterm--filter (process input)
+(defun vterm--filter (process input*)
   "I/O Event.  Feeds PROCESS's INPUT to the virtual terminal.
 
 Then triggers a redraw from the module."
   (when (buffer-live-p (process-buffer process))
     (with-current-buffer (process-buffer process)
-      (setq input (concat vterm--undecoded-bytes input)
-            vterm--undecoded-bytes nil)
-      (let* ((inhibit-redisplay t)
-             (inhibit-eol-conversion t)
-             (inhibit-read-only t)
-             (length (length input))
-             (i 0))
+      (when-let ((vterm-p (or (null last-command) ; for "emacs -f vterm"
+                              (string-prefix-p "vterm" (symbol-name this-command))
+                              (string-prefix-p "vterm" (symbol-name last-command))))
+                 (input (concat vterm--undecoded-bytes input*))
+                 (inhibit-redisplay t)
+                 (inhibit-eol-conversion t)
+                 (inhibit-read-only t)
+                 (length (length input))
+                 (i 0))
+        (setq vterm--undecoded-bytes nil)
         (while (< i length)
           (let* ((ctl-beg (string-match vterm-control-seq-regexp input i))
                  (ctl-end (if ctl-beg (match-end 0)
