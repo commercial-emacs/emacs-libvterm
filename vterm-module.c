@@ -206,17 +206,17 @@ static void fetch_cell(Term *term, int row, int col, VTermScreenCell *cell) {
   }
 }
 
-static char *get_row_directory(Term *term, int row) {
-  LineInfo *line = get_lineinfo(term, row);
-  return line ? line->directory : NULL;
-}
-
 static LineInfo *get_lineinfo(Term *term, int row) {
   if (row < 0) {
     ScrollbackLine *sbrow = term->sb_buffer[-row - 1];
     return sbrow ? sbrow->info : NULL;
   }
   return term->lines[row];
+}
+
+static char *get_row_directory(Term *term, int row) {
+  LineInfo *line = get_lineinfo(term, row);
+  return line ? line->directory : NULL;
 }
 
 static bool is_eol(Term *term, int end_col, int row, int col) {
