@@ -196,7 +196,7 @@ by default."
   "Whitelisted Emacs functions that can be executed from vterm.
 
 You can execute Emacs functions directly from vterm buffers.  To do this,
-you have to escape the name of the function and its arguments with \e]51;E.
+you have to escape the name of the function and its arguments.
 
 See Message passing in README.
 

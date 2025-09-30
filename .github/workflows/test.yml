@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore:
+    - '**.rst'
+    - '**.txt'
+    - '**.texi'
+  push:
+    paths-ignore:
+    - '**.txt'
+    - '**.rst'
+    - '**.texi'
+    branches-ignore:
+    - 'master'
+    - 'main'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: apt-get
+      if: startsWith(runner.os, 'Linux')
+      run: |
+        sudo apt-get -yq update
+        DEBIAN_FRONTEND=noninteractive sudo apt-get -yq install libxml2-dev libgccjit-11-dev libvterm-dev emacs
+
+    - name: brew-haha
+      if: startsWith(runner.os, 'macOS')
+      run: |
+        brew install emacs libvterm libgccjit libxml2
+
+    - name: test
+      run: |
+        make test
+        make install

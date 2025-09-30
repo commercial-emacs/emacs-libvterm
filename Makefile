@@ -15,7 +15,7 @@ else
 endif
 
 .PHONY: compile
-compile: vterm-module$(SOEXT)
+compile: $(CURDIR)/deps/archives/gnu/archive-contents vterm-module$(SOEXT)
 	$(EMACS) -batch \
 	  --eval "(setq byte-compile-error-on-warn t)" \
 	  --eval "(setq package-user-dir \"$(CURDIR)/deps\")" \
@@ -26,7 +26,7 @@ compile: vterm-module$(SOEXT)
 
 vterm-module$(SOEXT): $(CSRC) CMakeLists.txt
 	cmake -B build
-	$(BEAR) cmake --build build --clean-first --config Release -j $$(nproc)
+	$(BEAR) cmake --build build --clean-first --config Release -j8
 
 .PHONY: test
 test: compile
@@ -41,7 +41,7 @@ dist-clean:
 	)
 
 .PHONY: dist
-dist: dist-clean compile
+dist: dist-clean vterm-module$(SOEXT)
 	$(EMACS) -batch -L . -l vterm-package -f vterm-package-inception
 	( \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
@@ -50,6 +50,7 @@ dist: dist-clean compile
 	)
 
 define install-recipe
+	$(MAKE) dist
 	( \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
 	$(EMACS) --batch -l package --eval "(setq package-user-dir $(1))" \
@@ -62,10 +63,9 @@ define install-recipe
 	$(MAKE) dist-clean
 endef
 
-.PHONY: install-dev
-install-dev: dist
+$(CURDIR)/deps/archives/gnu/archive-contents:
 	$(call install-recipe,\"$(CURDIR)/deps\")
 
 .PHONY: install
-install: dist
+install:
 	$(call install-recipe,package-user-dir)
