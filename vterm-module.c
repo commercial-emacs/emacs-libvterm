@@ -207,26 +207,18 @@ static void fetch_cell(Term *term, int row, int col, VTermScreenCell *cell) {
 }
 
 static char *get_row_directory(Term *term, int row) {
-  if (row < 0) {
-    ScrollbackLine *sbrow = term->sb_buffer[-row - 1];
-    if (sbrow && sbrow->info)
-      return sbrow->info->directory;
-  } else {
-    LineInfo *line = term->lines[row];
-    if (line)
-      return line->directory;
-  }
-  return NULL;
+  LineInfo *line = get_lineinfo(term, row);
+  return line ? line->directory : NULL;
 }
+
 static LineInfo *get_lineinfo(Term *term, int row) {
   if (row < 0) {
     ScrollbackLine *sbrow = term->sb_buffer[-row - 1];
-    return sbrow->info;
-    /* return term->dirs[0]; */
-  } else {
-    return term->lines[row];
+    return sbrow ? sbrow->info : NULL;
   }
+  return term->lines[row];
 }
+
 static bool is_eol(Term *term, int end_col, int row, int col) {
   if (row >= 0)
     return vterm_screen_is_eol(term->vts, (VTermPos){.row = row, .col = col});
