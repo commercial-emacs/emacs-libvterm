@@ -3,7 +3,7 @@
 ;; Copyright (C) 2017-2020 by Lukas Fürmetz & Contributors
 ;;
 ;; Author: Lukas Fürmetz <fuermetz@mailbox.org>
-;; Version: 0.0.3
+;; Version: 0.0.4
 ;; URL: https://github.com/akermu/emacs-libvterm
 ;; Keywords: terminals
 ;; Package-Requires: ((emacs "25.1"))
@@ -103,15 +103,7 @@ the point up."
 
 (defcustom vterm-keymap-exceptions
   '("C-c" "C-x" "C-u" "C-g" "C-h" "C-l" "M-x" "M-o" "C-y" "M-y" "M-:")
-  "Exceptions for `vterm-keymap'.
-
-If you use a keybinding with a prefix-key, add that prefix-key to
-this list.  Note that after doing so that prefix-key cannot be sent
-to the terminal anymore.
-
-The mapping is done by the macro `vterm-define-key', and the
-function `vterm--exclude-keys' removes the keybindings defined in
-`vterm-keymap-exceptions'."
+  "Do not `vterm-send-key' these."
   :type '(repeat string)
   :set (lambda (sym val)
          (set sym val)
@@ -188,40 +180,25 @@ by default."
   :type 'boolean
   :group 'vterm)
 
-;; TODO: Improve doc string, it should not point to the readme but it should
-;;       be self-contained.
 (defcustom vterm-eval-cmds '(("find-file" find-file)
                              ("message" message)
                              ("vterm-clear-scrollback" vterm-clear-scrollback))
-  "Whitelisted Emacs functions that can be executed from vterm.
-
-You can execute Emacs functions directly from vterm buffers.  To do this,
-you have to escape the name of the function and its arguments.
+  "Backdoor facility to execute arbitrary elisp on term refresh.
 
 See Message passing in README.
 
-The function you want to execute has to be in `vterm-eval-cmds'.
-
 `vterm-eval-cmds' has to be a list of pairs of the format:
-\(NAME-OF-COMMAND-IN-SHELL EMACS-FUNCTION)
-
-The need for an explicit map is to avoid arbitrary code execution."
+\(NAME-OF-COMMAND-IN-SHELL EMACS-FUNCTION)"
   :type '(alist :key-type string)
   :group 'vterm)
 
 (defcustom vterm-disable-underline nil
-  "When not-nil, underline text properties are ignored.
-
-This means that vterm will render underlined text as if it was not
-underlined."
+  "Render underlined text as not underlined."
   :type  'boolean
   :group 'vterm)
 
 (defcustom vterm-disable-inverse-video nil
-  "When not-nil, inverse video text properties are ignored.
-
-This means that vterm will render reversed video text as if it was not
-such."
+  "Render inverse video text as not inverse video."
   :type  'boolean
   :group 'vterm)
 
@@ -229,49 +206,28 @@ such."
   'vterm-disable-bold "0.0.1")
 
 (defcustom vterm-disable-bold-font nil
-  "When not-nil, bold text properties are ignored.
-
-This means that vterm will render bold with the default face weight."
+  "Render bold text as not bold."
   :type  'boolean
   :group 'vterm)
 
 (defcustom vterm-set-bold-hightbright nil
-  "When not-nil, using hightbright colors for bolded text, see #549."
+  "Wtf is hightbright (see #549)."
   :type  'boolean
   :group 'vterm)
 
 (defcustom vterm-ignore-blink-cursor t
-  "When t, vterm will ignore request from application to turn on/off cursor blink.
-
-If nil, cursor in any window may begin to blink or not blink because
-`blink-cursor-mode`is a global minor mode in Emacs,
-you can use `M-x blink-cursor-mode` to toggle."
+  "Insulate against `blink-cursor-mode'.
+That globalized minor mode interferes with our control over blink."
   :type 'boolean
   :group 'vterm)
 
 (defcustom vterm-copy-exclude-prompt t
-  "When not-nil, the prompt is not included by `vterm-copy-mode-done'."
+  "Exclude prompt from copied line (useful for copying commands)."
   :type 'boolean
   :group 'vterm)
 
-(defcustom vterm-use-vterm-prompt-detection-method t
-  "When not-nil, the prompt is detected through the shell.
-
-Vterm needs to know where the shell prompt is to enable all the
-available features.  There are two supported ways to do this.
-First, the shell can inform vterm on the location of the prompt.
-This requires shell-side configuration: the escape code 51;A is
-used to set the current directory and prompt location.  This
-detection method is the most-reliable.  To use it, you have
-to change your shell prompt to print 51;A.
-
-The second method is using a regular expression. This method does
-not require any shell-side configuration. See
-`term-prompt-regexp', for more information."
-  :type 'boolean
-  :group 'vterm)
-
-(make-obsolete 'vterm-bookmark-check-dir nil "31.1")
+(make-obsolete 'vterm-use-vterm-prompt-detection-method nil "0.0.4")
+(make-obsolete 'vterm-bookmark-check-dir nil "0.0.4")
 (defvar-local vterm--exit-copy-mode-function nil)
 
 (defface vterm-color-black
@@ -399,65 +355,22 @@ Only background is used."
    vterm-color-bright-magenta
    vterm-color-bright-cyan
    vterm-color-bright-white]
-  "Color palette for the foreground and background.")
+  "Color palette for foreground and background.")
 
-(defvar-local vterm--term nil
-  "Pointer to Term.")
+(defvar-local vterm--term nil "Buffer-local VTerm.")
+(defvar-local vterm--process nil "Buffer-local process.")
+(defvar-local vterm--partial nil)
 
-(defvar-local vterm--process nil
-  "Shell process of current term.")
-
-(defvar-local vterm--prompt-tracking-enabled-p nil)
-(defvar-local vterm--undecoded-bytes nil)
-
-(defmacro vterm-define-key (key)
-  "Define a command that sends KEY with modifiers C and M to vterm."
-  (declare (indent defun)
-           (doc-string 3))
-  `(progn (defun ,(intern (format "vterm-send-%s" key))()
-            ,(format "Sends %s to the libvterm."  key)
-            (interactive)
-            (vterm-send-key ,(char-to-string (get-byte (1- (length key)) key))
-                            ,(let ((case-fold-search nil))
-                               (or (string-match-p "[A-Z]$" key)
-                                   (string-match-p "S-" key)))
-                            ,(string-match-p "M-" key)
-                            ,(string-match-p "C-" key)))
-          (make-obsolete ',(intern (format "vterm-send-%s" key))
-                         "use `vterm--self-insert' or `vterm-send' or `vterm-send-key'."
-                         "v0.1")))
-(make-obsolete 'vterm-define-key "" "v0.1")
-(mapc (lambda (key)
-        (eval `(vterm-define-key ,key)))
-      (cl-loop for prefix in '("M-")
-               append (cl-loop for char from ?A to ?Z
-                               for key = (format "%s%c" prefix char)
-                               collect key)))
-(mapc (lambda (key)
-        (eval `(vterm-define-key ,key)))
-      (cl-loop for prefix in '("C-" "M-" "C-S-")
-               append (cl-loop for char from ?a to ?z
-                               for key = (format "%s%c" prefix char)
-                               collect key)))
-
-;; Function keys and most of C- and M- bindings
 (defun vterm--exclude-keys (map exceptions)
-  "Remove EXCEPTIONS from the keys bound by `vterm-define-keys'.
-
-Exceptions are defined by `vterm-keymap-exceptions'."
-  (mapc (lambda (key)
-          (define-key map (kbd key) nil))
-        exceptions)
-  (mapc (lambda (key)
-          (define-key map (kbd key) #'vterm--self-insert))
+  (mapc (lambda (key) (define-key map (kbd key) nil)) exceptions)
+  (mapc (lambda (key) (define-key map (kbd key) #'vterm--self-insert))
         (cl-loop for number from 1 to 12
                  for key = (format "<f%i>" number)
                  unless (member key exceptions)
                  collect key))
-  (let ((esc-map (lookup-key map "\e"))
+  (let ((esc-map (or (lookup-key map "\e") (make-keymap)))
         (i 0)
         key)
-    (unless esc-map (setq esc-map (make-keymap)))
     (while (< i 128)
       (setq key (make-string 1 i))
       (unless (member (key-description key) exceptions)
@@ -757,14 +670,15 @@ will invert `vterm-copy-exclude-prompt' for that call."
     (unless (use-region-p)
       (beginning-of-line)
       ;; Are we excluding the prompt?
-      (if (or (and vterm-copy-exclude-prompt (not arg))
-              (and (not vterm-copy-exclude-prompt) arg))
-          (goto-char (max (or (vterm--get-prompt-point) 0)
-                          (line-beginning-position))))
+      (when (or (and vterm-copy-exclude-prompt (not arg))
+                (and (not vterm-copy-exclude-prompt) arg))
+        (if (text-property-any (point-min) (point-max) 'vterm-prompt t)
+            (vterm-skip-prompt)
+          (term-skip-prompt)))
       (set-mark (point))
-      (end-of-line))
+      (end-of-line)
     (kill-ring-save (region-beginning) (region-end))
-    (vterm-copy-mode -1)))
+    (vterm-copy-mode -1))))
 
 (defun vterm--self-insert-meta ()
   (interactive)
@@ -1186,20 +1100,20 @@ Then triggers a redraw from the module."
       (when-let ((vterm-p (or (null last-command) ; for "emacs -f vterm"
                               (string-prefix-p "vterm" (symbol-name this-command))
                               (string-prefix-p "vterm" (symbol-name last-command))))
-                 (input (concat vterm--undecoded-bytes input*))
+                 (input (concat vterm--partial input*))
                  (inhibit-redisplay t)
                  (inhibit-eol-conversion t)
                  (inhibit-read-only t)
                  (length (length input))
                  (i 0))
-        (setq vterm--undecoded-bytes nil)
+        (setq vterm--partial nil)
         (while (< i length)
           (let* ((ctl-beg (string-match vterm-control-seq-regexp input i))
                  (ctl-end (if ctl-beg (match-end 0)
                             (setq ctl-beg (string-match vterm-control-seq-prefix-regexp
                                                         input i))
                             (if ctl-beg
-                                (setq vterm--undecoded-bytes
+                                (setq vterm--partial
                                       (substring input ctl-beg))
                               (setq ctl-beg length))
                             (1+ length)))
@@ -1207,20 +1121,19 @@ Then triggers a redraw from the module."
                                                 locale-coding-system t)))
             (when (= ctl-beg length)
               ;; No control sequences; check for half-baked ones
-              (let ((partial 0)
+              (let ((partial-length 0)
                     (decoded-length (length decoded)))
-                (while (and (< partial decoded-length)
+                (while (and (< partial-length decoded-length)
                             (eq (char-charset (aref decoded
-                                                    (- decoded-length 1 partial)))
+                                                    (- decoded-length 1 partial-length)))
                                 'eight-bit))
-                  (cl-incf partial))
-                ;; PARTIAL is a multibyte fragment at end of
-                ;; INPUT which we save for next time.
-                (when (> partial 0)
-                  (setq vterm--undecoded-bytes (substring decoded (- partial))
-                        decoded (substring decoded 0 (- partial)))
-                  (cl-decf length partial)
-                  (cl-decf ctl-beg partial))))
+                  (cl-incf partial-length))
+                ;; VTERM--PARTIAL is a multibyte fragment for next iter
+                (when (> partial-length 0)
+                  (setq vterm--partial (substring decoded (- partial-length))
+                        decoded (substring decoded 0 (- partial-length)))
+                  (cl-decf length partial-length)
+                  (cl-decf ctl-beg partial-length))))
             (ignore-errors (vterm--write-input vterm--term decoded))
             (when (<= ctl-end length)
               (ignore-errors (vterm--write-input
@@ -1366,85 +1279,61 @@ the called functions."
       (message "Failed to find command: %s.  To execute a command,
                 add it to the `vterm-eval-cmd' list" command))))
 
-;; TODO: Improve doc string, it should not point to the readme but it should
-;;       be self-contained.
-(defun vterm--prompt-tracking-enabled-p ()
-  "Return t if tracking the prompt is enabled.
-
-Prompt tracking need shell side configurations.
-
-For zsh user, this is done by PROMPT=$PROMPT'%{$(vterm_prompt_end)%}'.
-
-The shell send semantic information about where the prompt ends via properly
-escaped sequences to Emacs.
-
-More information see `Shell-side configuration' and `Directory tracking'
-in README."
-  (or vterm--prompt-tracking-enabled-p
-      (save-excursion
-        (setq vterm--prompt-tracking-enabled-p
-              (next-single-property-change (point-min) 'vterm-prompt)))))
-
 (defun vterm-next-prompt (n)
   "Move to end of Nth next prompt in the buffer."
   (interactive "p")
-  (if (and vterm-use-vterm-prompt-detection-method
-           (vterm--prompt-tracking-enabled-p))
-      (let ((pt (point))
-            (promp-pt (vterm--get-prompt-point)))
-        (when promp-pt (goto-char promp-pt))
-        (cl-loop repeat (or n 1) do
-                 (setq pt (next-single-property-change (line-beginning-position 2) 'vterm-prompt))
-                 (when pt (goto-char pt))))
-    (term-next-prompt n)))
+  (unless n (setq n 1))
+  (if (< n 0)
+      (vterm-previous-prompt (- n))
+    (when-let ((end (vterm--get-prompt-end)))
+      (goto-char end)
+      (catch 'done
+        (dotimes (_i n)
+          (forward-line 1)
+          (end-of-line)
+          (if-let ((end (vterm--get-prompt-end)))
+              (goto-char end)
+            (throw 'done)))))))
 
 (defun vterm-previous-prompt (n)
   "Move to end of Nth previous prompt in the buffer."
+  ;; Assume no more than one prompt per line and prompts
+  ;; do not span lines.
   (interactive "p")
-  (if (and vterm-use-vterm-prompt-detection-method
-           (vterm--prompt-tracking-enabled-p))
-      (let ((pt (point))
-            (prompt-pt (vterm--get-prompt-point)))
-        (when prompt-pt
-          (goto-char prompt-pt)
-          (when (> pt (point))
-            (setq n (1- (or n 1))))
-          (cl-loop repeat n do
-                   (setq pt (previous-single-property-change (1- (point)) 'vterm-prompt))
-                   (when pt (goto-char (1- pt))))))
-    (term-previous-prompt n)))
+  (unless n (setq n 1))
+  (if (<= n 0)
+      (vterm-next-prompt (- n))
+    (if (text-property-any (point-min) (point-max) 'vterm-prompt t) ;O(lg n)
+        (catch 'done
+          (dotimes (_i n)
+            (forward-line -1)
+            (end-of-line (if (> n 0) 1 0))
+            (end-of-line )
+            (if-let ((end (vterm--get-prompt-end)))
+                (goto-char end)
+              (throw 'done))))
+      (term-previous-prompt n)))
 
-;; TODO: Improve doc string, it should not point to the readme but it should
-;;       be self-contained.
-(defun vterm--get-prompt-point ()
-  "Get the position of the end of current prompt.
-More information see `vterm--prompt-tracking-enabled-p' and
-`Directory tracking and Prompt tracking'in README."
-  (let ((end-point (line-end-position))
-        prompt-point)
-    (save-excursion
-      (if (and vterm-use-vterm-prompt-detection-method
-               (vterm--prompt-tracking-enabled-p))
-          (if (get-text-property end-point 'vterm-prompt)
-              end-point
-            (setq prompt-point (previous-single-property-change end-point 'vterm-prompt))
-            (when prompt-point (setq prompt-point (1- prompt-point))))
-        (goto-char end-point)
-        (if (search-backward-regexp term-prompt-regexp nil t)
-            (goto-char (match-end 0))
-          (line-beginning-position))))))
-
-(defun vterm--at-prompt-p ()
-  "Return t if the cursor position is at shell prompt."
-  (= (point) (or (vterm--get-prompt-point) 0)))
+(defun vterm-skip-prompt ()
+  "Return prompt ending (exclusive) position of current line."
+  (save-excursion
+    (if (text-property-any (point-min) (point-max) 'vterm-prompt t) ;O(lg n)
+        (if (get-text-property (point) 'vterm-prompt)
+            (next-single-property-change (point) 'vterm-prompt)
+          (if (get-text-property (max (point-min) (1- (point))) 'vterm-prompt)
+              (point) ; p-s-p-c returns pos strictly less than point
+            (previous-single-property-change (point) 'vterm-prompt)))
+      (let ((candidate (save-excursion (term-next-prompt 0) (point))))
+        (if (<= candidate (line-end-position))
+            candidate
+          (save-excursion (term-previous-prompt 1) (point)))))))
 
 (defun vterm-cursor-in-command-buffer-p (&optional pt)
   "Check whether cursor in command buffer area."
   (save-excursion
-    (vterm-reset-cursor-point)
-    (when-let ((promp-pt (vterm--get-prompt-point))
-               (current (save-excursion (vterm-reset-cursor-point))))
-      (<= promp-pt (or pt current)))))
+    (when-let ((current (vterm-reset-cursor-point))
+               (end (vterm--get-prompt-end)))
+      (>= (or pt current) end))))
 
 (defun vterm-reset-cursor-point ()
   "Interactivise `vterm--reset-cursor-point'."
