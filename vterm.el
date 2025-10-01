@@ -672,9 +672,7 @@ will invert `vterm-copy-exclude-prompt' for that call."
       ;; Are we excluding the prompt?
       (when (or (and vterm-copy-exclude-prompt (not arg))
                 (and (not vterm-copy-exclude-prompt) arg))
-        (if (text-property-any (point-min) (point-max) 'vterm-prompt t)
-            (vterm-skip-prompt)
-          (term-skip-prompt)))
+        (vterm-skip-prompt))
       (set-mark (point))
       (end-of-line)
     (kill-ring-save (region-beginning) (region-end))
@@ -1285,15 +1283,21 @@ the called functions."
   (unless n (setq n 1))
   (if (< n 0)
       (vterm-previous-prompt (- n))
-    (when-let ((end (vterm--get-prompt-end)))
-      (goto-char end)
-      (catch 'done
-        (dotimes (_i n)
-          (forward-line 1)
-          (end-of-line)
-          (if-let ((end (vterm--get-prompt-end)))
-              (goto-char end)
-            (throw 'done)))))))
+    (if (text-property-any (point-min) (point-max) 'vterm-prompt t) ;O(lg n)
+        (progn
+          (dotimes (i (1+ n))
+            (end-of-line (if (zerop i) 0 1))
+            (let* ((pos (point))
+                   (prev (get-text-property pos 'vterm-prompt)))
+              (when-let ((end
+                          (catch 'done
+                            (prog1 nil
+                              (while (setq pos (next-single-property-change
+                                                pos 'vterm-prompt))
+                                (when prev (throw 'done pos))
+                                (setq prev (get-text-property pos 'vterm-prompt)))))))
+                (goto-char end)))))
+      (term-next-prompt n))))
 
 (defun vterm-previous-prompt (n)
   "Move to end of Nth previous prompt in the buffer."
@@ -1304,35 +1308,29 @@ the called functions."
   (if (<= n 0)
       (vterm-next-prompt (- n))
     (if (text-property-any (point-min) (point-max) 'vterm-prompt t) ;O(lg n)
-        (catch 'done
-          (dotimes (_i n)
-            (forward-line -1)
-            (end-of-line (if (> n 0) 1 0))
-            (end-of-line )
-            (if-let ((end (vterm--get-prompt-end)))
-                (goto-char end)
-              (throw 'done))))
-      (term-previous-prompt n)))
+        (dotimes (_i n)
+          (end-of-line 0)
+          (unless (get-text-property (point) 'vterm-prompt) ;would be odd
+            (when-let ((pos (previous-single-property-change (point) 'vterm-prompt)))
+              (goto-char pos))))
+      (term-previous-prompt n))))
 
 (defun vterm-skip-prompt ()
-  "Return prompt ending (exclusive) position of current line."
-  (save-excursion
-    (if (text-property-any (point-min) (point-max) 'vterm-prompt t) ;O(lg n)
-        (if (get-text-property (point) 'vterm-prompt)
-            (next-single-property-change (point) 'vterm-prompt)
-          (if (get-text-property (max (point-min) (1- (point))) 'vterm-prompt)
-              (point) ; p-s-p-c returns pos strictly less than point
-            (previous-single-property-change (point) 'vterm-prompt)))
-      (let ((candidate (save-excursion (term-next-prompt 0) (point))))
-        (if (<= candidate (line-end-position))
-            candidate
-          (save-excursion (term-previous-prompt 1) (point)))))))
+  (if (text-property-any (point-min) (point-max) 'vterm-prompt t)
+      (when-let ((end (if (get-text-property (point) 'vterm-prompt)
+                          (next-single-property-change (point) 'vterm-prompt)
+                        (if (get-text-property (max (point-min) (1- (point)))
+                                               'vterm-prompt)
+                            (point) ; p-s-p-c returns pos strictly less than point
+                          (previous-single-property-change (point) 'vterm-prompt)))))
+        (goto-char end))
+    (term-skip-prompt)))
 
 (defun vterm-cursor-in-command-buffer-p (&optional pt)
   "Check whether cursor in command buffer area."
   (save-excursion
     (when-let ((current (vterm-reset-cursor-point))
-               (end (vterm--get-prompt-end)))
+               (end (save-excursion (vterm-skip-prompt))))
       (>= (or pt current) end))))
 
 (defun vterm-reset-cursor-point ()
