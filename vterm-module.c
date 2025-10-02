@@ -328,6 +328,7 @@ static void refresh_lines(Term *term, emacs_env *env, int start_row,
   VTermScreenCell prev_cell = (VTermScreenCell){0};
   for (int i = start_row; i < end_row; ++i) {
     if (max_rowlen > (BUFZ - len) || len_indices > WRAPZ) {
+      // Arrays close to full; flush to buffer
       insert(env, emacs_text(env, term, buffer, len, linewrap_indices,
 			     len_indices, &prev_cell));
       len = 0;

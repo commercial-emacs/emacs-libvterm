@@ -101,16 +101,21 @@ the point up."
   :type 'boolean
   :group 'vterm)
 
-(defcustom vterm-keymap-exceptions
-  '("C-c" "C-x" "C-u" "C-g" "C-h" "C-l" "M-x" "M-o" "C-y" "M-y" "M-:")
-  "Do not `vterm-send-key' these."
-  :type '(repeat string)
-  :set (lambda (sym val)
-         (set sym val)
-         (when (and (fboundp 'vterm--exclude-keys)
-                    (boundp 'vterm-mode-map))
-           (vterm--exclude-keys vterm-mode-map val)))
-  :group 'vterm)
+(defun vterm--prefix-keys ()
+  "Return prefix keys that libvterm should not intercept."
+  (let (prefix-keys)
+    ;; Collect all prefix keys from global-map
+    (map-keymap
+     (lambda (key binding)
+       (when (keymapp binding)
+         (let ((key-desc (key-description (vector key))))
+           ;; Only include keys that represent actual keyboard input
+           ;; Exclude special internal keys like <remap>, <vertical-line>, etc.
+           (when (or (not (string-prefix-p "<" key-desc))
+                     (not (string-suffix-p ">" key-desc)))
+             (push key-desc prefix-keys)))))
+     global-map)
+    prefix-keys))
 
 (defcustom vterm-exit-functions nil
   "List of functions called when a vterm process exits.
@@ -361,27 +366,6 @@ Only background is used."
 (defvar-local vterm--process nil "Buffer-local process.")
 (defvar-local vterm--partial nil)
 
-(defun vterm--exclude-keys (map exceptions)
-  (mapc (lambda (key) (define-key map (kbd key) nil)) exceptions)
-  (mapc (lambda (key) (define-key map (kbd key) #'vterm--self-insert))
-        (cl-loop for number from 1 to 12
-                 for key = (format "<f%i>" number)
-                 unless (member key exceptions)
-                 collect key))
-  (let ((esc-map (or (lookup-key map "\e") (make-keymap)))
-        (i 0)
-        key)
-    (while (< i 128)
-      (setq key (make-string 1 i))
-      (unless (member (key-description key) exceptions)
-        (define-key map key 'vterm--self-insert))
-      ;; Avoid O and [. They are used in escape sequences for various keys.
-      (unless (or (eq i ?O) (eq i 91))
-        (unless (member (key-description key "\e") exceptions)
-          (define-key esc-map key 'vterm--self-insert-meta)))
-      (setq i (1+ i)))
-    (define-key map "\e" esc-map)))
-
 (defun vterm-xterm-paste (event)
   "Handle xterm paste EVENT in vterm."
   (interactive "e")
@@ -392,7 +376,21 @@ Only background is used."
 
 (defvar vterm-mode-map
   (let ((map (make-sparse-keymap)))
-    (vterm--exclude-keys map vterm-keymap-exceptions)
+    (mapc (lambda (key) (define-key map (kbd key) #'vterm--self-insert))
+          (cl-loop for number from 1 to 12
+                   for key = (format "<f%i>" number)
+                   collect key))
+    (let ((esc-map (make-keymap)))
+      ;; Hypothesize that an explicit map of "M-blah" to
+      ;; vterm--self-insert-meta enforces interpretation
+      ;; of the ESC prefix to "M-".
+      (dotimes (i 128)
+        (define-key esc-map (char-to-string i) 'vterm--self-insert-meta))
+      (mapc (lambda (key)
+              (when (string-prefix-p "M-" key) ;M- is in fact ESC
+                (define-key esc-map (substring key 2) nil)))
+            (vterm--prefix-keys))
+      (define-key map (kbd "ESC") esc-map))
     (define-key map (kbd "C-]")                 #'vterm--self-insert)
     (define-key map (kbd "M-<")                 #'vterm--self-insert)
     (define-key map (kbd "M->")                 #'vterm--self-insert)
@@ -997,7 +995,7 @@ looks like: ((\"m\" :shift ))"
       (when-let ((key (key-description (vector raw-key))))
         (when (and (not (symbolp event)) shift (not meta) (not ctrl))
           (setq key (upcase key)))
-        (setq keys  (list (list key shift meta ctrl)))))
+        (setq keys (list (list key shift meta ctrl)))))
     keys))
 
 ;; see VTermSelectionMask in vterm.el
@@ -1277,13 +1275,17 @@ the called functions."
       (message "Failed to find command: %s.  To execute a command,
                 add it to the `vterm-eval-cmd' list" command))))
 
+(defsubst vterm-prompt-column-p ()
+  "Should be O(lg n) ?"
+  (text-property-any (point-min) (point-max) 'vterm-prompt t))
+
 (defun vterm-next-prompt (n)
   "Move to end of Nth next prompt in the buffer."
   (interactive "p")
   (unless n (setq n 1))
   (if (< n 0)
       (vterm-previous-prompt (- n))
-    (if (text-property-any (point-min) (point-max) 'vterm-prompt t) ;O(lg n)
+    (if (vterm-prompt-column-p)
         (progn
           (dotimes (i (1+ n))
             (end-of-line (if (zerop i) 0 1))
@@ -1301,13 +1303,11 @@ the called functions."
 
 (defun vterm-previous-prompt (n)
   "Move to end of Nth previous prompt in the buffer."
-  ;; Assume no more than one prompt per line and prompts
-  ;; do not span lines.
   (interactive "p")
   (unless n (setq n 1))
   (if (<= n 0)
       (vterm-next-prompt (- n))
-    (if (text-property-any (point-min) (point-max) 'vterm-prompt t) ;O(lg n)
+    (if (vterm-prompt-column-p)
         (dotimes (_i n)
           (end-of-line 0)
           (unless (get-text-property (point) 'vterm-prompt) ;would be odd
@@ -1316,7 +1316,7 @@ the called functions."
       (term-previous-prompt n))))
 
 (defun vterm-skip-prompt ()
-  (if (text-property-any (point-min) (point-max) 'vterm-prompt t)
+  (if (vterm-prompt-column-p)
       (when-let ((end (if (get-text-property (point) 'vterm-prompt)
                           (next-single-property-change (point) 'vterm-prompt)
                         (if (get-text-property (max (point-min) (1- (point)))
