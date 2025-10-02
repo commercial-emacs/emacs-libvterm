@@ -114,7 +114,8 @@ the point up."
                      (not (string-suffix-p ">" key-desc)))
              (push key-desc prefix-keys)))))
      global-map)
-    prefix-keys))
+    ;; meta-prefix-char (ESC) is special
+    (delete (key-description (vector meta-prefix-char)) prefix-keys)))
 
 (defcustom vterm-exit-functions nil
   "List of functions called when a vterm process exits.
@@ -402,23 +403,27 @@ Only background is used."
     (dolist (remap remaps)
       (define-key map (vector 'remap (car remap)) (cdr remap)))
 
-    ;; ASCII defines characters from 0 to 127 (7 bits: 2^7 = 128)
+    ;; Self-insert 7-bit ASCII
     ;; 0-31: Control characters (C-@, C-a through C-z, C-[, etc.)
     ;; 32-126: Printable characters (space through ~)
     ;; 127: DEL
     (dotimes (i 128)
-      (let ((key-desc (char-to-string i)))
-        (unless (member key-desc remap-keys)
-          (define-key map key-desc 'vterm--self-insert))))
+      (let ((key (char-to-string i)))
+        (unless (member key remap-keys)
+          (define-key map key 'vterm--self-insert))))
+
+    ;; Self-insert M-a through M-z
+    (define-key map (vector meta-prefix-char) (make-keymap)) ;M- now a prefix
+    (dotimes (i (- ?z ?a))
+      (let ((key (vector meta-prefix-char (+ ?a i))))
+        (unless (member key remap-keys)
+          (define-key map key 'vterm--self-insert))))
 
     ;; Let our fave emacs-specific prefixes pass through unharried
     (mapc (lambda (key) (define-key map (kbd key) nil)) (vterm--prefix-keys))
 
     ;; You can take C-g from my cold, dead hands.
     (define-key map (kbd "C-g") nil)
-
-    ;; You can take C-h from my cold, dead hands.
-    (define-key map (char-to-string help-char) nil)
 
     ;; Functionals are not part of ASCII
     (mapc (lambda (key) (define-key map (kbd key) #'vterm--self-insert))
