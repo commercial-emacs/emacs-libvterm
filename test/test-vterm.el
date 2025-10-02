@@ -30,9 +30,13 @@
 
 (defmacro test-vterm/with-session (&rest body)
   (declare (indent defun))
-  `(let ((b (vterm--get-buffer nil)))
+  `(let ((b (vterm--get-buffer nil))
+	 (wait-refresh (lambda (&rest _args)
+			 (accept-process-output vterm--process 0.05 nil t))))
      (unwind-protect
 	 (with-current-buffer b
+	   (dolist (f '(vterm-send vterm-send-key vterm-send-string))
+	     (add-function :after (symbol-function f) wait-refresh))
 	   (should (get-buffer-process (current-buffer)))
 	   (cl-loop repeat 100
 		    until (not (zerop (current-column)))
@@ -43,6 +47,8 @@
 				  (line-beginning-position) (point)))
 			   (should-not (zerop (length test-vterm/prompt)))))
 	   ,@body)
+       (dolist (f '(vterm-send vterm-send-key vterm-send-string))
+	 (remove-function (symbol-function f) wait-refresh))
        (let (kill-buffer-query-functions)
 	 (kill-buffer b)
 	 (cl-loop repeat 100

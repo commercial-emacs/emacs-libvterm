@@ -104,7 +104,6 @@ the point up."
 (defun vterm--prefix-keys ()
   "Return prefix keys that libvterm should not intercept."
   (let (prefix-keys)
-    ;; Collect all prefix keys from global-map
     (map-keymap
      (lambda (key binding)
        (when (keymapp binding)
@@ -378,18 +377,23 @@ Only background is used."
   (let* ((map (make-keymap))
          (remaps '((scroll-down-command . vterm--copy-mode-then)
                    (scroll-up-command . vterm--copy-mode-then)
-                   (yank . vterm-yank)
-                   (yank-pop . vterm-yank-pop)
-                   (mouse-yank-primary . vterm-yank-primary)
-                   (xterm-paste . vterm-xterm-paste)
-                   (undo . vterm-undo)
+                   ;; bash has a kill ring, claude doesn't but you
+                   ;; gotta let them do their thing (otherwise,
+                   ;; you could M-w in copy-mode, then whose
+                   ;; ring does C-y pull from in vterm-mode?)
+                   ;; (yank . vterm-yank)
+                   ;; (yank-pop . vterm-yank-pop)
+                   ;; (mouse-yank-primary . vterm-yank-primary)
+                   ;; (xterm-paste . vterm-xterm-paste)
+                   ;; (undo . vterm-undo)
                    (recenter-top-bottom . vterm-clear)
                    (previous-line . vterm--copy-mode-then)
                    (next-line . vterm--copy-mode-then)))
-         (dont-tread (mapcar (lambda (pair)
-                               (kbd (key-description
-                                     (where-is-internal (car pair) nil :first))))
-                             remaps)))
+         (remap-keys
+          (mapcar (lambda (pair)
+                    (kbd (key-description (where-is-internal
+                                           (car pair) nil :first))))
+                  remaps)))
     ;; Fallback.  Anything that would invoke self-insert-command gets
     ;; remapped to vterm--self-insert.
     (define-key map [remap self-insert-command] #'vterm--self-insert)
@@ -404,7 +408,7 @@ Only background is used."
     ;; 127: DEL
     (dotimes (i 128)
       (let ((key-desc (char-to-string i)))
-        (unless (member key-desc dont-tread)
+        (unless (member key-desc remap-keys)
           (define-key map key-desc 'vterm--self-insert))))
 
     ;; Let our fave emacs-specific prefixes pass through unharried
@@ -719,8 +723,7 @@ will invert `vterm-copy-exclude-prompt' for that call."
   (when vterm--term
     (let ((inhibit-redisplay t)
           (inhibit-read-only t))
-      (vterm--update vterm--term key shift meta ctrl)
-      (accept-process-output vterm--process 0.05 nil t))))
+      (vterm--update vterm--term key shift meta ctrl))))
 
 (defun vterm-send (key)
   "Send KEY to libvterm.  KEY can be anything `kbd' understands."
@@ -909,11 +912,10 @@ Optional argument PASTE-P paste-p."
   (when vterm--term
     (when paste-p
       (vterm--update vterm--term "<start_paste>" ))
-    (dolist (char (string-to-list string))
-      (vterm--update vterm--term (char-to-string char)))
+    (dolist (letter (split-string string "" t))
+      (vterm--update vterm--term letter))
     (when paste-p
-      (vterm--update vterm--term "<end_paste>")))
-  (accept-process-output vterm--process 0.05 nil t))
+      (vterm--update vterm--term "<end_paste>"))))
 
 (defun vterm-insert (&rest contents)
   "Insert the arguments, either strings or characters, at point.
@@ -922,12 +924,10 @@ Provide similar behavior as `insert' for vterm."
   (when vterm--term
     (vterm--update vterm--term "<start_paste>")
     (dolist (c contents)
-      (if (characterp c)
-          (vterm--update vterm--term (char-to-string c))
-        (dolist (char (string-to-list c))
-          (vterm--update vterm--term (char-to-string char)))))
-    (vterm--update vterm--term "<end_paste>")
-    (accept-process-output vterm--process 0.05 nil t)))
+      (setq c (if (characterp c) (char-to-string c) c))
+      (dolist (letter (split-string c "" t))
+        (vterm--update vterm--term letter)))
+    (vterm--update vterm--term "<end_paste>")))
 
 (defun vterm-goto-char (pos)
   "Set point to POSITION for vterm.
