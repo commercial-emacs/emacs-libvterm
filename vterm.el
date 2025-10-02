@@ -382,24 +382,24 @@ Only background is used."
                    collect key))
     (dotimes (i 128)
       (define-key map (kbd (concat "C-" (char-to-string i))) 'vterm--self-insert))
-    (mapc (lambda (key)
-            (when (and (string-prefix-p "C-" key)
-                       (not (string-prefix-p "C-<" key)))
-              (define-key map (kbd key) nil)))
+    (mapc (lambda (key) (define-key map (kbd key) nil))
           (vterm--prefix-keys))
-    (let ((esc-map (make-keymap)))
-      ;; An explicit map of "ESC-blah" to enforce interpretation
-      ;; of the ESC prefix to "M-".
-      (dotimes (i 128)
-        (unless (or (= i ?O) (= i 91)) ;used in various escape sequences
-          (define-key esc-map (char-to-string i) 'vterm--self-insert-meta)))
-      (mapc (lambda (key)
-              (when (string-prefix-p "M-" key) ;M- is in fact ESC
-                (define-key esc-map (substring key 2) nil)))
-            (vterm--prefix-keys))
-      (define-key esc-map (char-to-string ?\d) #'vterm-send-meta-backspace)
-      (define-key esc-map (char-to-string ?v) #'vterm-copy-mode)
-      (define-key map (kbd "ESC") esc-map))
+    ;; (let ((esc-map (make-keymap)))
+    ;;   ;; Wait, I don't want ESC blah, an emacs retrofit for old terminals
+    ;;   ;; without a Meta key, to go to vterm.  It's an emacs-specific thing.
+    ;;   ;; Why would I complicate the code to send an emacs-specific thing
+    ;;   ;; to vterm?
+    ;;   (dotimes (i 128)
+    ;;     (unless (or (= i ?O) (= i 91)) ;used in various escape sequences
+    ;;       (define-key esc-map (char-to-string i) 'vterm--self-insert-meta)))
+    ;;   (mapc (lambda (key)
+    ;;           (when (string-prefix-p "M-" key) ;M- is in fact ESC
+    ;;             (define-key esc-map (substring key 2) nil)))
+    ;;         (vterm--prefix-keys))
+    ;;   (define-key esc-map (char-to-string ?\d) #'vterm-send-meta-backspace)
+    ;;   (define-key esc-map (char-to-string ?v) #'vterm-copy-mode)
+    ;;   (define-key map (char-to-string meta-prefix-char) esc-map))
+    (define-key map (kbd "M-v") #'vterm-copy-mode)
     (define-key map [tab]                       #'vterm-send-tab)
     (define-key map (kbd "TAB")                 #'vterm-send-tab)
     (define-key map [backtab]                   #'vterm--self-insert)
@@ -431,7 +431,6 @@ Only background is used."
     (define-key map [end]                       #'vterm--self-insert)
     (define-key map [C-home]                    #'vterm--self-insert)
     (define-key map [C-end]                     #'vterm--self-insert)
-    (define-key map [escape]                    #'vterm--self-insert)
     (define-key map [remap yank]                #'vterm-yank)
     (define-key map [remap xterm-paste]         #'vterm-xterm-paste)
     (define-key map [remap yank-pop]            #'vterm-yank-pop)
