@@ -375,91 +375,98 @@ Only background is used."
   (vterm-yank))
 
 (defvar vterm-mode-map
-  (let ((map (make-keymap)))
+  (let* ((map (make-keymap))
+         (remaps '((scroll-down-command . vterm--copy-mode-then)
+                   (scroll-up-command . vterm--copy-mode-then)
+                   (yank . vterm-yank)
+                   (yank-pop . vterm-yank-pop)
+                   (mouse-yank-primary . vterm-yank-primary)
+                   (xterm-paste . vterm-xterm-paste)
+                   (undo . vterm-undo)
+                   (recenter-top-bottom . vterm-clear)
+                   (previous-line . vterm--copy-mode-then)
+                   (next-line . vterm--copy-mode-then)))
+         (dont-tread (mapcar (lambda (pair)
+                               (kbd (key-description
+                                     (where-is-internal (car pair) nil :first))))
+                             remaps)))
+    ;; Fallback.  Anything that would invoke self-insert-command gets
+    ;; remapped to vterm--self-insert.
+    (define-key map [remap self-insert-command] #'vterm--self-insert)
+
+    ;; Other bespoke remaps besides vterm--self-insert
+    (dolist (remap remaps)
+      (define-key map (vector 'remap (car remap)) (cdr remap)))
+
+    ;; ASCII defines characters from 0 to 127 (7 bits: 2^7 = 128)
+    ;; 0-31: Control characters (C-@, C-a through C-z, C-[, etc.)
+    ;; 32-126: Printable characters (space through ~)
+    ;; 127: DEL
+    (dotimes (i 128)
+      (let ((key-desc (char-to-string i)))
+        (unless (member key-desc dont-tread)
+          (define-key map key-desc 'vterm--self-insert))))
+
+    ;; Let our fave emacs-specific prefixes pass through unharried
+    (mapc (lambda (key) (define-key map (kbd key) nil)) (vterm--prefix-keys))
+
+    ;; You can take C-g from my cold, dead hands.
+    (define-key map (kbd "C-g") nil)
+
+    ;; You can take C-h from my cold, dead hands.
+    (define-key map (char-to-string help-char) nil)
+
+    ;; Functionals are not part of ASCII
     (mapc (lambda (key) (define-key map (kbd key) #'vterm--self-insert))
           (cl-loop for number from 1 to 12
                    for key = (format "<f%i>" number)
                    collect key))
-    (dotimes (i 128)
-      (define-key map (kbd (concat "C-" (char-to-string i))) 'vterm--self-insert))
-    (mapc (lambda (key) (define-key map (kbd key) nil))
-          (vterm--prefix-keys))
-    ;; (let ((esc-map (make-keymap)))
-    ;;   ;; Wait, I don't want ESC blah, an emacs retrofit for old terminals
-    ;;   ;; without a Meta key, to go to vterm.  It's an emacs-specific thing.
-    ;;   ;; Why would I complicate the code to send an emacs-specific thing
-    ;;   ;; to vterm?
-    ;;   (dotimes (i 128)
-    ;;     (unless (or (= i ?O) (= i 91)) ;used in various escape sequences
-    ;;       (define-key esc-map (char-to-string i) 'vterm--self-insert-meta)))
-    ;;   (mapc (lambda (key)
-    ;;           (when (string-prefix-p "M-" key) ;M- is in fact ESC
-    ;;             (define-key esc-map (substring key 2) nil)))
-    ;;         (vterm--prefix-keys))
-    ;;   (define-key esc-map (char-to-string ?\d) #'vterm-send-meta-backspace)
-    ;;   (define-key esc-map (char-to-string ?v) #'vterm-copy-mode)
-    ;;   (define-key map (char-to-string meta-prefix-char) esc-map))
-    (define-key map (kbd "M-v") #'vterm-copy-mode)
-    (define-key map [tab]                       #'vterm-send-tab)
-    (define-key map (kbd "TAB")                 #'vterm-send-tab)
-    (define-key map [backtab]                   #'vterm--self-insert)
-    (define-key map [backspace]                 #'vterm-send-backspace)
-    (define-key map (kbd "DEL")                 #'vterm-send-backspace)
-    (define-key map [delete]                    #'vterm-send-delete)
-    (define-key map [M-backspace]               #'vterm-send-meta-backspace)
-    (define-key map [C-backspace]               #'vterm-send-meta-backspace)
-    (define-key map [return]                    #'vterm-send-return)
-    (define-key map (kbd "RET")                 #'vterm-send-return)
-    (define-key map [C-left]                    #'vterm--self-insert)
-    (define-key map [M-left]                    #'vterm--self-insert)
-    (define-key map [C-right]                   #'vterm--self-insert)
-    (define-key map [M-right]                   #'vterm--self-insert)
-    (define-key map [C-up]                      #'vterm--self-insert)
-    (define-key map [C-down]                    #'vterm--self-insert)
-    (define-key map [M-up]                      #'vterm--self-insert)
-    (define-key map [M-down]                    #'vterm--self-insert)
-    (define-key map [left]                      #'vterm--self-insert)
-    (define-key map [right]                     #'vterm--self-insert)
-    (define-key map [up]                        #'vterm-copy-mode)
-    (define-key map [down]                      #'vterm-copy-mode)
-    (define-key map [prior]                     #'vterm--self-insert)
-    (define-key map [S-prior]                   #'scroll-down-command)
-    (define-key map [next]                      #'vterm--self-insert)
-    (define-key map [S-next]                    #'scroll-up-command)
-    (define-key map (kbd "C-v")                       #'vterm-copy-mode)
-    (define-key map [home]                      #'vterm--self-insert)
-    (define-key map [end]                       #'vterm--self-insert)
-    (define-key map [C-home]                    #'vterm--self-insert)
-    (define-key map [C-end]                     #'vterm--self-insert)
-    (define-key map [remap yank]                #'vterm-yank)
-    (define-key map [remap xterm-paste]         #'vterm-xterm-paste)
-    (define-key map [remap yank-pop]            #'vterm-yank-pop)
-    (define-key map [remap mouse-yank-primary]  #'vterm-yank-primary)
-    (define-key map [mouse-1]                   #'vterm-mouse-set-point)
-    (define-key map (kbd "S-SPC")               #'vterm-send-space)
-    (define-key map [remap undo]                #'vterm-undo)
-    (define-key map (kbd "C-c C-y")             #'vterm--self-insert)
-    (define-key map (kbd "C-c C-c")             #'vterm--self-insert)
-    (define-key map (kbd "C-c C-l")             #'vterm-clear-scrollback)
-    (define-key map (kbd "C-l")                 #'vterm-clear)
-    (define-key map (kbd "C-c C-g")             #'vterm--self-insert)
-    (define-key map (kbd "C-c C-u")             #'vterm--self-insert)
-    (define-key map [remap self-insert-command] #'vterm--self-insert)
-    (define-key map (kbd "C-c C-r")             #'vterm-reset-cursor-point)
-    (define-key map (kbd "C-c C-n")             #'vterm-next-prompt)
-    (define-key map (kbd "C-c C-p")             #'vterm-previous-prompt)
-    (define-key map (kbd "C-c C-t")             #'vterm-copy-mode)
-    (define-key map (kbd "C-g")                       #'keyboard-quit)
+
+    ;; Directionals are not part of ASCII
+    (dolist (dir '("left" "right" "up" "down"))
+      (dolist (mod '("" "C-" "M-"))
+        (define-key map (vector (intern (concat mod dir))) #'vterm--self-insert)))
+
+    ;; Home/End/PgUp/PgDn are not part of ASCII
+    (define-key map [prior] #'vterm--self-insert)
+    (define-key map [next] #'vterm--self-insert)
+    (define-key map [home] #'vterm--self-insert)
+    (define-key map [end] #'vterm--self-insert)
+    (define-key map [C-home] #'vterm--self-insert)
+    (define-key map [C-end] #'vterm--self-insert)
+
+    ;; Take tighter control with Shift-PgUp and Shift-PgDn
+    (define-key map [S-prior] #'scroll-down-command)
+    (define-key map [S-next] #'scroll-up-command)
+
+    ;; Mouse shit
+    (define-key map [mouse-1] #'vterm-mouse-set-point)
+
+    ;; vterm-specific hooks for whitespace characters
+    (define-key map [tab] #'vterm-send-tab)
+    (define-key map (kbd "TAB") #'vterm-send-tab)
+    (define-key map [backspace] #'vterm-send-backspace)
+    (define-key map (kbd "DEL") #'vterm-send-backspace) ;wut, yes
+    (define-key map [delete] #'vterm-send-delete)
+    (define-key map [return] #'vterm-send-return)
+    (define-key map (kbd "RET") #'vterm-send-return)
+
+    ;; vterm.el bespoke bindings
+    (define-key map (kbd "C-c C-r") #'vterm-reset-cursor-point)
+    (define-key map (kbd "C-c C-n") #'vterm-next-prompt)
+    (define-key map (kbd "C-c C-p") #'vterm-previous-prompt)
+    (define-key map (kbd "C-c C-t") #'vterm-copy-mode)
     map))
 
 (defvar vterm-copy-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-t")        #'vterm-copy-mode)
-    (define-key map [return]               #'vterm-copy-mode-done)
-    (define-key map (kbd "RET")            #'vterm-copy-mode-done)
-    (define-key map (kbd "C-c C-r")        #'vterm-reset-cursor-point)
-    (define-key map (kbd "C-c C-n")        #'vterm-next-prompt)
-    (define-key map (kbd "C-c C-p")        #'vterm-previous-prompt)
+  (let ((map (make-keymap)))
+    (define-key map (kbd "C-c C-t") #'vterm-copy-mode)
+    (define-key map [remap self-insert-command] 'vterm--copy-mode-done-then)
+    (define-key map [return] #'vterm-copy-mode-done)
+    (define-key map (kbd "RET") #'vterm-copy-mode-done)
+    (define-key map (kbd "C-c C-r") #'vterm-reset-cursor-point)
+    (define-key map (kbd "C-c C-n") #'vterm-next-prompt)
+    (define-key map (kbd "C-c C-p") #'vterm-previous-prompt)
     map))
 
 (define-derived-mode vterm-mode nil "VTerm"
@@ -676,6 +683,20 @@ will invert `vterm-copy-exclude-prompt' for that call."
       (end-of-line)
     (kill-ring-save (region-beginning) (region-end))
     (vterm-copy-mode -1))))
+
+(defun vterm--copy-mode-then ()
+  (interactive)
+  (let ((keys (key-description (this-command-keys))))
+    (call-interactively #'vterm-copy-mode)
+    (when-let ((command (keymap-lookup global-map keys)))
+      (call-interactively command))))
+
+(defun vterm--copy-mode-done-then ()
+  (interactive)
+  (let ((keys (key-description (this-command-keys))))
+    (call-interactively #'vterm-copy-mode-done)
+    (when-let ((command (keymap-lookup global-map keys)))
+      (call-interactively command))))
 
 (defun vterm--self-insert-meta ()
   (interactive)
