@@ -416,7 +416,7 @@ Only background is used."
     (define-key map (vector meta-prefix-char) (make-keymap)) ;M- now a prefix
     (dotimes (i (- ?z ?a))
       (let ((key (vector meta-prefix-char (+ ?a i))))
-        (unless (member key remap-keys)
+        (unless (member (kbd (key-description key)) remap-keys)
           (define-key map key 'vterm--self-insert))))
 
     ;; Let our fave emacs-specific prefixes pass through unharried
@@ -424,6 +424,12 @@ Only background is used."
 
     ;; You can take C-g from my cold, dead hands.
     (define-key map (kbd "C-g") nil)
+
+    ;; M-x
+    (define-key map (where-is-internal #'execute-extended-command nil :first) nil)
+
+    ;; I need to escape for vi and others (No ESC-x, but M-x allowed)
+    (define-key map [escape] #'vterm-send-escape)
 
     ;; Functionals are not part of ASCII
     (mapc (lambda (key) (define-key map (kbd key) #'vterm--self-insert))
@@ -453,6 +459,7 @@ Only background is used."
 
     ;; vterm-specific hooks for whitespace characters
     (define-key map [tab] #'vterm-send-tab)
+    (define-key map [backtab] #'vterm--self-insert)
     (define-key map (kbd "TAB") #'vterm-send-tab)
     (define-key map [backspace] #'vterm-send-backspace)
     (define-key map (kbd "DEL") #'vterm-send-backspace) ;wut, yes
@@ -1081,7 +1088,9 @@ value of `vterm-buffer-name'."
     (prog1 buf
       (with-current-buffer buf
         (unless (derived-mode-p 'vterm-mode)
-          (vterm-mode))))))
+          (vterm-mode)
+          ;; Get first-time vterm--filter to refresh
+          (setq this-command 'vterm))))))
 
 (defun vterm--flush-output (output)
   "Send the virtual terminal's OUTPUT to the shell."
@@ -1120,8 +1129,7 @@ value of `vterm-buffer-name'."
 Then triggers a redraw from the module."
   (when (buffer-live-p (process-buffer process))
     (with-current-buffer (process-buffer process)
-      (when-let ((vterm-p (or (null last-command) ; for "emacs -f vterm"
-                              (string-prefix-p "vterm" (symbol-name this-command))
+      (when-let ((vterm-p (or (string-prefix-p "vterm" (symbol-name this-command))
                               (string-prefix-p "vterm" (symbol-name last-command))))
                  (input (concat vterm--partial input*))
                  (inhibit-redisplay t)
