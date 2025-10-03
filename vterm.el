@@ -39,6 +39,15 @@
            (user-error "Emacs requires compilation switch --with-modules"))
          (signal (car err) (cdr err))))
 
+;; a maintenance gotcha with vterm-module.c term_process_key
+(defconst vterm--keys '(tab backtab iso-lefttab backspace escape
+                        up down left right
+                        insert delete home end prior next
+                        f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+                        kp-0 kp-1 kp-2 kp-3 kp-4 kp-5 kp-6 kp-7 kp-8 kp-9
+                        kp-add kp-subtract kp-multiply kp-divide kp-equal
+                        kp-decimal kp-separator))
+
 (declare-function vterm--reset-cursor-point "vterm-module")
 (declare-function vterm--get-pwd-raw "vterm-module")
 (declare-function vterm--set-size "vterm-module")
@@ -428,27 +437,14 @@ Only background is used."
     ;; M-x
     (define-key map (where-is-internal #'execute-extended-command nil :first) nil)
 
-    ;; I need to escape for vi and others (No ESC-x, but M-x allowed)
-    (define-key map [escape] #'vterm-send-escape)
+    ;; Keys in vterm_keycodes.h (vterm-module.c term_process_key)
+    (dolist (key vterm--keys)
+      (define-key map (vector key) #'vterm--self-insert))
 
-    ;; Functionals are not part of ASCII
-    (mapc (lambda (key) (define-key map (kbd key) #'vterm--self-insert))
-          (cl-loop for number from 1 to 12
-                   for key = (format "<f%i>" number)
-                   collect key))
-
-    ;; Directionals are not part of ASCII
+    ;; Modifier directionals
     (dolist (dir '("left" "right" "up" "down"))
-      (dolist (mod '("" "C-" "M-"))
+      (dolist (mod '("C-" "M-"))
         (define-key map (vector (intern (concat mod dir))) #'vterm--self-insert)))
-
-    ;; Home/End/PgUp/PgDn are not part of ASCII
-    (define-key map [prior] #'vterm--self-insert)
-    (define-key map [next] #'vterm--self-insert)
-    (define-key map [home] #'vterm--self-insert)
-    (define-key map [end] #'vterm--self-insert)
-    (define-key map [C-home] #'vterm--self-insert)
-    (define-key map [C-end] #'vterm--self-insert)
 
     ;; Take tighter control with Shift-PgUp and Shift-PgDn
     (define-key map [S-prior] #'scroll-down-command)
@@ -457,15 +453,9 @@ Only background is used."
     ;; Mouse shit
     (define-key map [mouse-1] #'vterm-mouse-set-point)
 
-    ;; vterm-specific hooks for whitespace characters
-    (define-key map [tab] #'vterm-send-tab)
-    (define-key map [backtab] #'vterm--self-insert)
-    (define-key map (kbd "TAB") #'vterm-send-tab)
-    (define-key map [backspace] #'vterm-send-backspace)
-    (define-key map (kbd "DEL") #'vterm-send-backspace) ;wut, yes
-    (define-key map [delete] #'vterm-send-delete)
+    ;; ICRNL dependency
     (define-key map [return] #'vterm-send-return)
-    (define-key map (kbd "RET") #'vterm-send-return)
+    (define-key map [kp-enter] #'vterm-send-return)
 
     ;; vterm.el bespoke bindings
     (define-key map (kbd "C-c C-r") #'vterm-reset-cursor-point)
@@ -714,28 +704,19 @@ will invert `vterm-copy-exclude-prompt' for that call."
     (when-let ((command (keymap-lookup global-map keys)))
       (call-interactively command))))
 
-(defun vterm--self-insert-meta ()
-  (interactive)
-  (when vterm--term
-    (dolist (key (vterm--translate-event-to-args
-                  last-command-event :meta))
-      (apply #'vterm-send-key key))))
-
 (defun vterm--self-insert ()
   "Send invoking key to libvterm."
   (interactive)
-  (when vterm--term
-    (dolist (key (vterm--translate-event-to-args
-                  last-command-event))
-      (apply #'vterm-send-key key))))
+  (dolist (key (vterm--translate-event-to-args
+                last-command-event))
+    (apply #'vterm-send-key key)))
 
 (defun vterm-send-key (key &optional shift meta ctrl)
   "Send KEY to libvterm with optional modifiers SHIFT, META and CTRL."
   (deactivate-mark)
-  (when vterm--term
-    (let ((inhibit-redisplay t)
-          (inhibit-read-only t))
-      (vterm--update vterm--term key shift meta ctrl))))
+  (let ((inhibit-redisplay t)
+        (inhibit-read-only t))
+    (vterm--update vterm--term key shift meta ctrl)))
 
 (defun vterm-send (key)
   "Send KEY to libvterm.  KEY can be anything `kbd' understands."
@@ -767,94 +748,8 @@ running in the terminal (like Emacs or Nano)."
   "Send C-m to libvterm."
   (interactive)
   (deactivate-mark)
-  (when vterm--term
-    (if (vterm--get-icrnl vterm--term)
-        (process-send-string vterm--process "\C-j")
-      (process-send-string vterm--process "\C-m"))))
-
-(defun vterm-send-tab ()
-  "Send <tab> to libvterm."
-  (interactive)
-  (vterm-send-key "<tab>"))
-
-(defun vterm-send-space ()
-  "Send <space> to libvterm."
-  (interactive)
-  (vterm-send-key " "))
-
-(defun vterm-send-backspace ()
-  "Send <backspace> to libvterm."
-  (interactive)
-  (vterm-send-key "<backspace>"))
-
-(defun vterm-send-delete ()
-  "Send <delete> to libvterm."
-  (interactive)
-  (vterm-send-key "<delete>"))
-
-(defun vterm-send-meta-backspace ()
-  "Send M-<backspace> to libvterm."
-  (interactive)
-  (vterm-send-key "<backspace>" nil t))
-
-(defun vterm-send-up ()
-  "Send <up> to libvterm."
-  (interactive)
-  (vterm-send-key "<up>"))
-(make-obsolete 'vterm-send-up 'vterm--self-insert "v0.1")
-
-(defun vterm-send-down ()
-  "Send <down> to libvterm."
-  (interactive)
-  (vterm-send-key "<down>"))
-(make-obsolete 'vterm-send-down 'vterm--self-insert "v0.1")
-
-(defun vterm-send-left ()
-  "Send <left> to libvterm."
-  (interactive)
-  (vterm-send-key "<left>"))
-(make-obsolete 'vterm-send-left 'vterm--self-insert "v0.1")
-
-(defun vterm-send-right ()
-  "Send <right> to libvterm."
-  (interactive)
-  (vterm-send-key "<right>"))
-(make-obsolete 'vterm-send-right 'vterm--self-insert "v0.1")
-
-(defun vterm-send-prior ()
-  "Send <prior> to libvterm."
-  (interactive)
-  (vterm-send-key "<prior>"))
-(make-obsolete 'vterm-send-prior 'vterm--self-insert "v0.1")
-
-(defun vterm-send-next ()
-  "Send <next> to libvterm."
-  (interactive)
-  (vterm-send-key "<next>"))
-(make-obsolete 'vterm-send-next 'vterm--self-insert "v0.1")
-
-(defun vterm-send-meta-dot ()
-  "Send M-. to libvterm."
-  (interactive)
-  (vterm-send-key "." nil t))
-(make-obsolete 'vterm-send-meta-dot 'vterm--self-insert "v0.1")
-
-(defun vterm-send-meta-comma ()
-  "Send M-, to libvterm."
-  (interactive)
-  (vterm-send-key "," nil t))
-(make-obsolete 'vterm-send-meta-comma 'vterm--self-insert "v0.1")
-
-(defun vterm-send-ctrl-slash ()
-  "Send C-\ to libvterm."
-  (interactive)
-  (vterm-send-key "\\" nil nil t))
-(make-obsolete 'vterm-send-ctrl-slash 'vterm--self-insert "v0.1")
-
-(defun vterm-send-escape ()
-  "Send <escape> to libvterm."
-  (interactive)
-  (vterm-send-key "<escape>"))
+  (process-send-string vterm--process
+                       (if (vterm--get-icrnl vterm--term) "\C-j" "\C-m")))
 
 (defun vterm-clear-scrollback ()
   "Send <clear-scrollback> to libvterm."
@@ -921,25 +816,23 @@ move the cursor to the prompt area."
 (defun vterm-send-string (string &optional paste-p)
   "Send the string STRING to vterm.
 Optional argument PASTE-P paste-p."
-  (when vterm--term
-    (when paste-p
-      (vterm--update vterm--term "<start_paste>" ))
-    (dolist (letter (split-string string "" t))
-      (vterm--update vterm--term letter))
-    (when paste-p
-      (vterm--update vterm--term "<end_paste>"))))
+  (when paste-p
+    (vterm--update vterm--term "<start_paste>" ))
+  (dolist (letter (split-string string "" t))
+    (vterm--update vterm--term letter))
+  (when paste-p
+    (vterm--update vterm--term "<end_paste>")))
 
 (defun vterm-insert (&rest contents)
   "Insert the arguments, either strings or characters, at point.
 
 Provide similar behavior as `insert' for vterm."
-  (when vterm--term
-    (vterm--update vterm--term "<start_paste>")
-    (dolist (c contents)
-      (setq c (if (characterp c) (char-to-string c) c))
-      (dolist (letter (split-string c "" t))
-        (vterm--update vterm--term letter)))
-    (vterm--update vterm--term "<end_paste>")))
+  (vterm--update vterm--term "<start_paste>")
+  (dolist (c contents)
+    (setq c (if (characterp c) (char-to-string c) c))
+    (dolist (letter (split-string c "" t))
+      (vterm--update vterm--term letter)))
+  (vterm--update vterm--term "<end_paste>"))
 
 (defun vterm-goto-char (pos)
   "Set point to POSITION for vterm.
@@ -1005,7 +898,7 @@ Return count of moved characeters."
       nil)
      (t nil))))
 
-(defun vterm--translate-event-to-args (event &optional meta)
+(defun vterm--translate-event-to-args (event)
   "Translate EVENT as list of args for `vterm-send-key'.
 
 When some input method is enabled, one key may generate
@@ -1013,7 +906,7 @@ several characters, so the result of this function is a list,
 looks like: ((\"m\" :shift ))"
   (let* ((modifiers (event-modifiers event))
          (shift (memq 'shift modifiers))
-         (meta (or meta (memq 'meta modifiers)))
+         (meta (memq 'meta modifiers))
          (ctrl (memq 'control modifiers))
          (raw-key (event-basic-type event))
          (ev-keys) keys)
@@ -1088,9 +981,7 @@ value of `vterm-buffer-name'."
     (prog1 buf
       (with-current-buffer buf
         (unless (derived-mode-p 'vterm-mode)
-          (vterm-mode)
-          ;; Get first-time vterm--filter to refresh
-          (setq this-command 'vterm))))))
+          (vterm-mode))))))
 
 (defun vterm--flush-output (output)
   "Send the virtual terminal's OUTPUT to the shell."
@@ -1129,14 +1020,11 @@ value of `vterm-buffer-name'."
 Then triggers a redraw from the module."
   (when (buffer-live-p (process-buffer process))
     (with-current-buffer (process-buffer process)
-      (when-let ((vterm-p (or (string-prefix-p "vterm" (symbol-name this-command))
-                              (string-prefix-p "vterm" (symbol-name last-command))))
-                 (input (concat vterm--partial input*))
-                 (inhibit-redisplay t)
-                 (inhibit-eol-conversion t)
-                 (inhibit-read-only t)
-                 (length (length input))
-                 (i 0))
+      ;; 1. Bash spews, VTerm ingests
+      (let* ((input (concat vterm--partial input*))
+             (length (length input))
+             (inhibit-eol-conversion t)
+             (i 0))
         (setq vterm--partial nil)
         (while (< i length)
           (let* ((ctl-beg (string-match vterm-control-seq-regexp input i))
@@ -1169,8 +1057,19 @@ Then triggers a redraw from the module."
             (when (<= ctl-end length)
               (ignore-errors (vterm--write-input
                               vterm--term (substring input ctl-beg ctl-end))))
-            (setq i ctl-end)))
-        (vterm--update vterm--term)))))
+            (setq i ctl-end))))
+      ;; 2. Reflect apprised VTerm to display (judiciously as to avoid flicker)
+      (let ((update (lambda (b)
+                      (when (buffer-live-p b)
+                        (with-current-buffer b
+                          (let ((inhibit-redisplay t)
+                                (inhibit-read-only t))
+                            (vterm--update vterm--term)))))))
+        (if (or (string-prefix-p "vterm" (symbol-name this-command))
+                (string-prefix-p "vterm" (symbol-name last-command))
+                noninteractive)
+            (funcall update (current-buffer))
+          (run-with-idle-timer 1 nil update (current-buffer)))))))
 
 (defun vterm--sentinel (process event)
   "Sentinel of vterm PROCESS.
@@ -1243,8 +1142,7 @@ Return true on success."
 
 (defun vterm--set-directory (path)
   "Set `default-directory' to PATH."
-  (let ((dir (vterm--get-directory path)))
-    (when dir (setq default-directory dir))))
+  (setq default-directory (or (vterm--get-directory path) default-directory)))
 
 (defun vterm--get-directory (path)
   "Get normalized directory to PATH."
@@ -1267,12 +1165,10 @@ Return true on success."
 
 (defun vterm--get-pwd (&optional linenum)
   "Get working directory at LINENUM."
-  (when vterm--term
-    (let ((raw-pwd (vterm--get-pwd-raw
-                    vterm--term
-                    (or linenum (line-number-at-pos)))))
-      (when raw-pwd
-        (vterm--get-directory raw-pwd)))))
+  (when-let ((raw-pwd (vterm--get-pwd-raw
+                       vterm--term
+                       (or linenum (line-number-at-pos)))))
+    (vterm--get-directory raw-pwd)))
 
 (defun vterm--get-color (index &rest args)
   "Get color by INDEX from `vterm-color-palette'.
@@ -1282,8 +1178,8 @@ may optionally contain `:underline' or `:inverse-video' for cells
 with underline or inverse video attribute.  If ARGS contains
 `:foreground', use foreground color of the respective face
 instead of background."
-  (let ((foreground    (member :foreground args))
-        (underline     (member :underline args))
+  (let ((foreground (member :foreground args))
+        (underline (member :underline args))
         (inverse-video (member :inverse-video args)))
     (funcall (if foreground #'face-foreground #'face-background)
              (cond
@@ -1304,9 +1200,9 @@ the called functions."
   (let* ((parts (split-string-and-unquote str))
          (command (car parts))
          (args (cdr parts))
-         (f (assoc command vterm-eval-cmds)))
-    (if f
-        (apply (cadr f) args)
+         (fun (assoc command vterm-eval-cmds)))
+    (if fun
+        (apply (cadr fun) args)
       (message "Failed to find command: %s.  To execute a command,
                 add it to the `vterm-eval-cmd' list" command))))
 
@@ -1371,9 +1267,8 @@ the called functions."
 (defun vterm-reset-cursor-point ()
   "Interactivise `vterm--reset-cursor-point'."
   (interactive)
-  (when vterm--term
-    (let ((inhibit-read-only t))
-      (vterm--reset-cursor-point vterm--term))))
+  (let ((inhibit-read-only t))
+    (vterm--reset-cursor-point vterm--term)))
 
 (defun vterm--line-wraps ()
   "Return list of conses (POS . STRING)."

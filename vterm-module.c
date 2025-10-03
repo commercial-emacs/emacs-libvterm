@@ -398,7 +398,6 @@ static void refresh_screen(Term *term, emacs_env *env) {
     goto_line(env, -invalid_offset); /* negate to say "from bottom" */
     delete_lines(env, -invalid_offset, invalid_count, true);
     refresh_lines(term, env, term->invalid_start, term->invalid_end, term->width);
-
     /* lines added by increase in window height */
     term->linenum += term->linenum_added;
     term->linenum_added = 0;
@@ -1308,8 +1307,6 @@ emacs_value Fvterm__get_icrnl(emacs_env *env, ptrdiff_t nargs,
 
     if (keys.c_iflag & ICRNL)
       return Qt;
-    else
-      return Qnil;
   }
   return Qnil;
 }
