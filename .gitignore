@@ -4,3 +4,5 @@
 /deps
 compile_commands.json
 /.cache
+CLAUDE.md
+AGENT.md

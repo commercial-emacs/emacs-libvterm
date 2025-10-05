@@ -110,5 +110,26 @@
 	(should (equal x3 (buffer-substring-no-properties
 			   (line-beginning-position) (line-end-position))))))))
 
+(ert-deftest yank-pop ()
+  (test-vterm/with-session
+    (should (zerop (length kill-ring)))
+    (should (test-vterm/at-prompt))
+    (test-vterm/run (format "echo the quick brown fox"))
+    (call-interactively #'vterm-copy-mode)
+    (re-search-backward (regexp-quote "quick brown"))
+    (copy-region-as-kill (point) (+ (point) (length "quick")))
+    (copy-region-as-kill (point) (+ (point) (length "quick brown")))
+    (call-interactively #'vterm-copy-mode)
+    (should (test-vterm/at-prompt))
+    ;; i don't know why save-excursion does not work
+    (let ((start (vterm-reset-cursor-point)))
+      (call-interactively #'vterm-yank)
+      (accept-process-output vterm--process 0.1)
+      (goto-char start)
+      (should (looking-at (regexp-quote "quick brown")))
+      (call-interactively #'vterm-yank-pop-dwim)
+      (goto-char start)
+      (should (looking-at (regexp-quote "quick"))))))
+
 (provide 'test-vterm)
 ;;; test-vterm.el ends here

@@ -535,10 +535,8 @@ static void adjust_topline(Term *term, emacs_env *env) {
       } else {
         recenter(env, env->make_integer(env, pos.row));
       }
-    } else {
-      if (env->is_not_nil(env, window)) {
-        set_window_point(env, window, point(env));
-      }
+    } else if (env->is_not_nil(env, window)) {
+      set_window_point(env, window, point(env));
     }
   }
 }

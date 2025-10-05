@@ -389,11 +389,8 @@ Only background is used."
   (let* ((map (make-keymap))
          (remaps '((scroll-down-command . vterm--copy-mode-then)
                    (scroll-up-command . vterm--copy-mode-then)
-                   ;; (yank . vterm-yank)
-                   ;; (yank-pop . vterm-yank-pop)
                    ;; (mouse-yank-primary . vterm-yank-primary)
                    ;; (xterm-paste . vterm-xterm-paste)
-                   ;; (undo . vterm-undo)
                    (recenter-top-bottom . vterm-clear)
                    (previous-line . vterm--copy-mode-then)
                    (next-line . vterm--copy-mode-then)))
@@ -719,16 +716,18 @@ will invert `vterm-copy-exclude-prompt' for that call."
 (defun vterm--self-insert ()
   "Send invoking key to libvterm."
   (interactive)
-  (dolist (key (vterm--translate-event-to-args
-                last-command-event))
-    (apply #'vterm-send-key key)))
+  (when vterm--term ;avoid segv if calling outside vterm buffer
+    (dolist (key (vterm--translate-event-to-args
+                  last-command-event))
+      (apply #'vterm-send-key key))))
 
 (defun vterm-send-key (key &optional shift meta ctrl)
   "Send KEY to libvterm with optional modifiers SHIFT, META and CTRL."
   (deactivate-mark)
-  (let ((inhibit-redisplay t)
-        (inhibit-read-only t))
-    (vterm--update vterm--term key shift meta ctrl)))
+  (when vterm--term ;avoid segv if calling outside vterm buffer
+    (let ((inhibit-redisplay t)
+          (inhibit-read-only t))
+      (vterm--update vterm--term key shift meta ctrl))))
 
 (defun vterm-send (key)
   "Send KEY to libvterm.  KEY can be anything `kbd' understands."
@@ -760,8 +759,9 @@ running in the terminal (like Emacs or Nano)."
   "Send C-m to libvterm."
   (interactive)
   (deactivate-mark)
-  (process-send-string vterm--process
-                       (if (vterm--get-icrnl vterm--term) "\C-j" "\C-m")))
+  (when vterm--term
+    (process-send-string vterm--process
+                         (if (vterm--get-icrnl vterm--term) "\C-j" "\C-m"))))
 
 (defun vterm-clear-scrollback ()
   "Send <clear-scrollback> to libvterm."
@@ -792,23 +792,25 @@ move the cursor to the prompt area."
 (defun vterm-send-string (string &optional paste-p)
   "Send the string STRING to vterm.
 Optional argument PASTE-P paste-p."
-  (when paste-p
-    (vterm--update vterm--term "<start_paste>" ))
-  (dolist (letter (split-string string "" t))
-    (vterm--update vterm--term letter))
-  (when paste-p
-    (vterm--update vterm--term "<end_paste>")))
+  (when vterm--term
+    (when paste-p
+      (vterm--update vterm--term "<start_paste>" ))
+    (dolist (letter (split-string string "" t))
+      (vterm--update vterm--term letter))
+    (when paste-p
+      (vterm--update vterm--term "<end_paste>"))))
 
 (defun vterm-insert (&rest strings)
   "Insert the arguments, either strings or characters, at point.
 
 Provide similar behavior as `insert' for vterm."
-  (vterm--update vterm--term "<start_paste>")
-  (dolist (s strings)
-    (setq s (if (characterp s) (char-to-string s) s))
-    (dolist (letter (split-string s "" t))
-      (vterm--update vterm--term letter)))
-  (vterm--update vterm--term "<end_paste>"))
+  (when vterm--term ;avoid segv if calling outside vterm buffer
+    (vterm--update vterm--term "<start_paste>")
+    (dolist (s strings)
+      (setq s (if (characterp s) (char-to-string s) s))
+      (dolist (letter (split-string s "" t))
+        (vterm--update vterm--term letter)))
+    (vterm--update vterm--term "<end_paste>")))
 
 (defun vterm-undo ()
   "Send `C-_' to the libvterm."
@@ -820,6 +822,7 @@ Provide similar behavior as `insert' for vterm."
 
 Argument ARG is passed to `yank'."
   (interactive "P")
+  (deactivate-mark)
   (save-excursion
     (let ((inhibit-read-only t)
           (this-command this-command) ;yank messes wit dis
@@ -1187,7 +1190,8 @@ Return true on success."
 
 (defun vterm--get-pwd (&optional linenum)
   "Get working directory at LINENUM."
-  (when-let ((raw-pwd (vterm--get-pwd-raw
+  (when-let ((term-p vterm--term)
+             (raw-pwd (vterm--get-pwd-raw
                        vterm--term
                        (or linenum (line-number-at-pos)))))
     (vterm--get-directory raw-pwd)))
@@ -1289,8 +1293,9 @@ the called functions."
 (defun vterm-reset-cursor-point ()
   "Interactivise `vterm--reset-cursor-point'."
   (interactive)
-  (let ((inhibit-read-only t))
-    (vterm--reset-cursor-point vterm--term)))
+  (when vterm--term
+    (let ((inhibit-read-only t))
+      (vterm--reset-cursor-point vterm--term))))
 
 (defun vterm--line-wraps ()
   "Return list of conses (POS . STRING)."
