@@ -1311,6 +1311,7 @@ emacs_value Fvterm__get_icrnl(emacs_env *env, ptrdiff_t nargs,
   return Qnil;
 }
 
+/* Gets emacs's cursor (aka point) to vterm's cursor.  */
 emacs_value Fvterm__reset_cursor_point(emacs_env *env, ptrdiff_t nargs,
 				       emacs_value args[], void *data) {
   Term *term = env->get_user_ptr(env, args[0]);

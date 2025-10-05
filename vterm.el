@@ -375,22 +375,20 @@ Only background is used."
 (defvar-local vterm--process nil "Buffer-local process.")
 (defvar-local vterm--partial nil)
 
-(defun vterm-xterm-paste (event)
-  "Handle xterm paste EVENT in vterm."
-  (interactive "e")
-  (with-temp-buffer
-    (xterm-paste event)
-    (kill-new (buffer-string)))
-  (vterm-yank))
+(defun vterm--alias-set-mark ()
+  (interactive)
+  (let ((last-command-event (aref (kbd "C-@") 0)))
+    (call-interactively #'vterm--self-insert)))
+
+(defun vterm--alias-undo ()
+  (interactive)
+  (let ((last-command-event (aref (kbd "C-_") 0)))
+    (call-interactively #'vterm--self-insert)))
 
 (defvar vterm-mode-map
   (let* ((map (make-keymap))
          (remaps '((scroll-down-command . vterm--copy-mode-then)
                    (scroll-up-command . vterm--copy-mode-then)
-                   ;; bash has a kill ring, claude doesn't but you
-                   ;; gotta let them do their thing (otherwise,
-                   ;; you could M-w in copy-mode, then whose
-                   ;; ring does C-y pull from in vterm-mode?)
                    ;; (yank . vterm-yank)
                    ;; (yank-pop . vterm-yank-pop)
                    ;; (mouse-yank-primary . vterm-yank-primary)
@@ -421,12 +419,21 @@ Only background is used."
         (unless (member key remap-keys)
           (define-key map key 'vterm--self-insert))))
 
+    ;; As emacs users, we want C-SPC to get mapped to C-@ (set-mark)
+    (define-key map (kbd "C-SPC") 'vterm--alias-set-mark)
+
+    ;; As emacs users, we want C-/ to get mapped to C-_ (undo)
+    (define-key map (kbd "C-/") 'vterm--alias-undo)
+
     ;; Self-insert M-a through M-z
     (define-key map (vector meta-prefix-char) (make-keymap)) ;M- now a prefix
     (dotimes (i (- ?z ?a))
       (let ((key (vector meta-prefix-char (+ ?a i))))
         (unless (member (kbd (key-description key)) remap-keys)
           (define-key map key 'vterm--self-insert))))
+
+    ;; Use vterm-yank-pop after C-c C-y, else pass through to shell
+    (define-key map (kbd "M-y") 'vterm-yank-pop-dwim)
 
     ;; Let our fave emacs-specific prefixes pass through unharried
     (mapc (lambda (key) (define-key map (kbd key) nil)) (vterm--prefix-keys))
@@ -458,10 +465,16 @@ Only background is used."
     (define-key map [kp-enter] #'vterm-send-return)
 
     ;; vterm.el bespoke bindings
+    (define-key map (kbd "C-c C-c") #'vterm--self-insert)
+    (define-key map (kbd "C-c C-/") #'vterm--self-insert)
+    (define-key map (kbd "C-c C-z") #'vterm--self-insert)
+    (define-key map (kbd "C-c C-d") #'vterm--self-insert)
     (define-key map (kbd "C-c C-r") #'vterm-reset-cursor-point)
     (define-key map (kbd "C-c C-n") #'vterm-next-prompt)
     (define-key map (kbd "C-c C-p") #'vterm-previous-prompt)
     (define-key map (kbd "C-c C-t") #'vterm-copy-mode)
+    (define-key map (kbd "C-c C-y") #'vterm-yank)
+    (define-key map (kbd "C-c M-y") #'vterm-yank-pop)
     map))
 
 (defvar vterm-copy-mode-map
@@ -511,8 +524,7 @@ Only background is used."
     (setq-local hscroll-step 1)
     (setq-local truncate-lines t)
 
-    ;; Disable all automatic fontification
-    (setq-local font-lock-defaults '(nil t))
+    (font-lock-mode -1)
 
     (setq vterm--process
           (make-process
@@ -765,42 +777,6 @@ A prefix argument ARG negates the `vterm-clear-scrollback' setting."
     (vterm-clear-scrollback))
   (vterm-send-key "l" nil nil :ctrl))
 
-(defun vterm-undo ()
-  "Send C-_ to the libvterm."
-  (interactive)
-  (vterm-send-key "_" nil nil t))
-
-(defun vterm-yank (&optional arg)
-  "Yank (paste) text in vterm.
-
-Argument ARG is passed to `yank'."
-  (interactive "P")
-  (deactivate-mark)
-  (vterm-goto-char (point))
-  (let ((inhibit-read-only t))
-    (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
-      (yank arg))))
-
-(defun vterm-yank-primary ()
-  "Yank text from the primary selection in vterm."
-  (interactive)
-  (vterm-goto-char (point))
-  (let ((inhibit-read-only t)
-        (primary (gui-get-primary-selection)))
-    (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
-      (insert-for-yank primary))))
-
-(defun vterm-yank-pop (&optional arg)
-  "Replaced text just yanked with the next entry in the kill ring.
-
-Argument ARG is passed to `yank'"
-  (interactive "p")
-  (vterm-goto-char (point))
-  (let ((inhibit-read-only t)
-        (yank-undo-function #'(lambda (_start _end) (vterm-undo))))
-    (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
-      (yank-pop arg))))
-
 (defun vterm-mouse-set-point (event &optional promote-to-region)
   "Move point to the position clicked on with the mouse.
 But when clicking to the unused area below the last prompt,
@@ -823,16 +799,62 @@ Optional argument PASTE-P paste-p."
   (when paste-p
     (vterm--update vterm--term "<end_paste>")))
 
-(defun vterm-insert (&rest contents)
+(defun vterm-insert (&rest strings)
   "Insert the arguments, either strings or characters, at point.
 
 Provide similar behavior as `insert' for vterm."
   (vterm--update vterm--term "<start_paste>")
-  (dolist (c contents)
-    (setq c (if (characterp c) (char-to-string c) c))
-    (dolist (letter (split-string c "" t))
+  (dolist (s strings)
+    (setq s (if (characterp s) (char-to-string s) s))
+    (dolist (letter (split-string s "" t))
       (vterm--update vterm--term letter)))
   (vterm--update vterm--term "<end_paste>"))
+
+(defun vterm-undo ()
+  "Send `C-_' to the libvterm."
+  (interactive)
+  (vterm-send-key "_" nil nil t))
+
+(defun vterm-yank (&optional arg)
+  "Yank (paste) text in vterm.
+
+Argument ARG is passed to `yank'."
+  (interactive "P")
+  (save-excursion
+    (let ((inhibit-read-only t)
+          (this-command this-command) ;yank messes wit dis
+          (start (vterm-reset-cursor-point)))
+      (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
+        (yank arg))
+      (let ((end (vterm-reset-cursor-point)))
+        (when (> (length arg) (- end start))
+          (message "vterm-yank: partial yank"))))))
+
+(defun vterm-yank-pop (&optional arg)
+  "Replaced text just yanked with the next entry in the kill ring.
+
+Argument ARG is passed to `yank'"
+  (interactive "p")
+  (save-excursion
+    (cl-letf ((last-command (when (or (eq last-command 'vterm-yank)
+                                      (eq last-command 'vterm-yank-pop))
+                              ;; trick yank-pop
+                              'yank))
+              (yank-undo-function (lambda (_start _end) (vterm-undo)))
+              ((symbol-function 'insert-for-yank) #'vterm-insert)
+              (inhibit-read-only t))
+      (yank-pop arg)))
+  ;; yank-pop messed wit this
+  (setq this-command 'vterm-yank-pop))
+
+(defun vterm-yank-pop-dwim (&optional arg)
+  "Context-aware yank-pop.
+If previous command was `vterm-yank' or `vterm-yank-pop', rotate Emacs
+kill ring. Otherwise, send M-y to bash to use its kill ring."
+  (interactive "p")
+  (if (memq last-command '(vterm-yank vterm-yank-pop))
+      (vterm-yank-pop arg)
+    (vterm--self-insert)))
 
 (defun vterm-goto-char (pos)
   "Set point to POSITION for vterm.
@@ -1069,7 +1091,7 @@ Then triggers a redraw from the module."
                 (string-prefix-p "vterm" (symbol-name last-command))
                 noninteractive)
             (funcall update (current-buffer))
-          (run-with-idle-timer 1 nil update (current-buffer)))))))
+          (run-with-timer 1 nil update (current-buffer)))))))
 
 (defun vterm--sentinel (process event)
   "Sentinel of vterm PROCESS.
