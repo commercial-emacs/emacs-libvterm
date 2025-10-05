@@ -46,7 +46,7 @@
                         f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
                         kp-0 kp-1 kp-2 kp-3 kp-4 kp-5 kp-6 kp-7 kp-8 kp-9
                         kp-add kp-subtract kp-multiply kp-divide kp-equal
-                        kp-decimal kp-separator))
+                        kp-decimal kp-separator kp-enter))
 
 (declare-function vterm--reset-cursor-point "vterm-module")
 (declare-function vterm--get-pwd-raw "vterm-module")
@@ -457,9 +457,9 @@ Only background is used."
     ;; Mouse shit
     (define-key map [mouse-1] #'vterm-mouse-set-point)
 
-    ;; ICRNL dependency
-    (define-key map [return] #'vterm-send-return)
-    (define-key map [kp-enter] #'vterm-send-return)
+    ;; Tell term_process-key "<return>".
+    (dolist (ret '(return M-return S-return C-return))
+      (define-key map (vector ret) #'vterm--self-insert))
 
     ;; vterm.el bespoke bindings
     (define-key map (kbd "C-c C-c") #'vterm--self-insert)
@@ -477,6 +477,7 @@ Only background is used."
 (defvar vterm-copy-mode-map
   (let ((map (make-keymap)))
     (define-key map (kbd "C-c C-t") #'vterm-copy-mode)
+    (define-key map (kbd "C-c C-y") #'vterm--copy-mode-done-then)
     (define-key map [remap self-insert-command] 'vterm--copy-mode-done-then)
     (define-key map [return] #'vterm-copy-mode-done)
     (define-key map (kbd "RET") #'vterm-copy-mode-done)
@@ -662,11 +663,7 @@ for, or t to get the default shell for all methods."
 When `vterm-copy-mode' is enabled, the terminal will not display
 additional output received from the underlying process and will
 behave similarly to buffer in `fundamental-mode'.  This mode is
-typically used to copy text from vterm buffers.
-
-A conventient way to exit `vterm-copy-mode' is with
-`vterm-copy-mode-done', which copies the selected text and exit
-`vterm-copy-mode'."
+typically used to copy text from vterm buffers."
   :group 'vterm
   :lighter " VTermCopy"
   :keymap vterm-copy-mode-map
@@ -678,27 +675,9 @@ A conventient way to exit `vterm-copy-mode' is with
           (funcall vterm--exit-copy-mode-function)))
     (user-error "You cannot enable vterm-copy-mode outside vterm buffers")))
 
-(defun vterm-copy-mode-done (arg)
-  "Save the active region or line to the kill ring and exit `vterm-copy-mode'.
-
-If a region is defined then that region is killed, with no region then
-current line is killed from start to end.
-
-The option `vterm-copy-exclude-prompt' controls if the prompt
-should be included in a line copy.  Using the universal prefix ARG
-will invert `vterm-copy-exclude-prompt' for that call."
-  (interactive "P")
-  (when vterm-copy-mode
-    (unless (use-region-p)
-      (beginning-of-line)
-      ;; Are we excluding the prompt?
-      (when (or (and vterm-copy-exclude-prompt (not arg))
-                (and (not vterm-copy-exclude-prompt) arg))
-        (vterm-skip-prompt))
-      (set-mark (point))
-      (end-of-line)
-    (kill-ring-save (region-beginning) (region-end))
-    (vterm-copy-mode -1))))
+(defun vterm-copy-mode-done ()
+  (interactive)
+  (vterm-copy-mode -1))
 
 (defun vterm--copy-mode-then ()
   (interactive)
@@ -711,7 +690,7 @@ will invert `vterm-copy-exclude-prompt' for that call."
   (interactive)
   (let ((keys (key-description (this-command-keys))))
     (call-interactively #'vterm-copy-mode-done)
-    (when-let ((command (keymap-lookup global-map keys)))
+    (when-let ((command (keymap-lookup vterm-mode-map keys)))
       (call-interactively command))))
 
 (defun vterm--self-insert ()
@@ -755,14 +734,6 @@ running in the terminal (like Emacs or Nano)."
   "Output from the system is stopped when the system receives STOP."
   (interactive)
   (vterm-send-key "<stop>"))
-
-(defun vterm-send-return ()
-  "Send C-m to libvterm."
-  (interactive)
-  (deactivate-mark)
-  (when vterm--term
-    (process-send-string vterm--process
-                         (if (vterm--get-icrnl vterm--term) "\C-j" "\C-m"))))
 
 (defun vterm-clear-scrollback ()
   "Send <clear-scrollback> to libvterm."
