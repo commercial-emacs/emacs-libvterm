@@ -52,7 +52,6 @@
 (declare-function vterm--get-pwd-raw "vterm-module")
 (declare-function vterm--set-size "vterm-module")
 (declare-function vterm--write-input "vterm-module")
-(declare-function vterm--get-icrnl "vterm-module")
 (declare-function vterm--update "vterm-module")
 (declare-function vterm--set-pty-name "vterm-module")
 (declare-function vterm--new "vterm-module")

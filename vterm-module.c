@@ -1297,20 +1297,6 @@ emacs_value Fvterm__get_pwd(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return dir ? env->make_string(env, dir, strlen(dir)) : Qnil;
 }
 
-emacs_value Fvterm__get_icrnl(emacs_env *env, ptrdiff_t nargs,
-			      emacs_value args[], void *data) {
-  Term *term = env->get_user_ptr(env, args[0]);
-
-  if (term->pty_fd > 0) {
-    struct termios keys;
-    tcgetattr(term->pty_fd, &keys);
-
-    if (keys.c_iflag & ICRNL)
-      return Qt;
-  }
-  return Qnil;
-}
-
 /* Gets emacs's cursor (aka point) to vterm's cursor.  */
 emacs_value Fvterm__reset_cursor_point(emacs_env *env, ptrdiff_t nargs,
 				       emacs_value args[], void *data) {
@@ -1424,10 +1410,6 @@ int emacs_module_init(struct emacs_runtime *ert) {
   fun = env->make_function(env, 1, 1, Fvterm__reset_cursor_point,
                            "Reset cursor position.", NULL);
   bind_function(env, "vterm--reset-cursor-point", fun);
-
-  fun = env->make_function(env, 1, 1, Fvterm__get_icrnl,
-                           "Get the icrnl state of the pty", NULL);
-  bind_function(env, "vterm--get-icrnl", fun);
 
   provide(env, "vterm-module");
 

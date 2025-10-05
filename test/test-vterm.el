@@ -64,7 +64,7 @@
 (defsubst test-vterm/run (command)
   (should (test-vterm/at-prompt))
   (vterm-send-string command)
-  (vterm-send-return)
+  (vterm-send-key "<return>")
   (cl-loop repeat 100
 	   until (test-vterm/at-prompt)
 	   do (sleep-for 0.2)

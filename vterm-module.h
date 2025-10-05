@@ -149,9 +149,6 @@ emacs_value Fvterm__set_size(emacs_env *env, ptrdiff_t nargs, emacs_value args[]
 			     void *data);
 emacs_value Fvterm__set_pty_name(emacs_env *env, ptrdiff_t nargs,
 				 emacs_value args[], void *data);
-emacs_value Fvterm__get_icrnl(emacs_env *env, ptrdiff_t nargs,
-			      emacs_value args[], void *data);
-
 emacs_value Fvterm__get_pwd(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
 			    void *data);
 emacs_value Fvterm__reset_cursor_point(emacs_env *env, ptrdiff_t nargs,
