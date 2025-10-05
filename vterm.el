@@ -521,7 +521,8 @@ Only background is used."
     (setq-local hscroll-step 1)
     (setq-local truncate-lines t)
 
-    (font-lock-mode -1)
+    ;; font-lock-mode remains on but defanged
+    (setq-local font-lock-defaults '(nil t))
 
     (setq vterm--process
           (make-process
