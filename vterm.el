@@ -521,8 +521,7 @@ Only background is used."
     (setq-local hscroll-step 1)
     (setq-local truncate-lines t)
 
-    ; font-lock-mode remains on, but defanged
-    (setq-local font-lock-defaults '(nil t))
+    (font-lock-mode -1)
 
     (setq vterm--process
           (make-process
@@ -790,12 +789,28 @@ move the cursor to the prompt area."
   ;; Otherwise it selects text for every other click
   (keyboard-quit))
 
-(defun vterm-send-string (string)
+(defun vterm-send-string (string &optional paste-p)
   "Send the string STRING to vterm.
 Optional argument PASTE-P paste-p."
   (when vterm--term
+    (when paste-p
+      (vterm--update vterm--term "<start_paste>" ))
     (dolist (letter (split-string string "" t))
-      (vterm--update vterm--term letter))))
+      (vterm--update vterm--term letter))
+    (when paste-p
+      (vterm--update vterm--term "<end_paste>"))))
+
+(defun vterm-insert (&rest strings)
+  "Insert the arguments, either strings or characters, at point.
+
+Provide similar behavior as `insert' for vterm."
+  (when vterm--term ;avoid segv if calling outside vterm buffer
+    (vterm--update vterm--term "<start_paste>")
+    (dolist (s strings)
+      (setq s (if (characterp s) (char-to-string s) s))
+      (dolist (letter (split-string s "" t))
+        (vterm--update vterm--term letter)))
+    (vterm--update vterm--term "<end_paste>")))
 
 (defun vterm-undo ()
   "Send `C-_' to the libvterm."
@@ -812,7 +827,7 @@ Argument ARG is passed to `yank'."
     (let ((inhibit-read-only t)
           (this-command this-command) ;yank messes wit dis
           (start (vterm-reset-cursor-point)))
-      (cl-letf (((symbol-function 'insert-for-yank) #'vterm-send-string))
+      (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
         (yank arg))
       (let ((end (vterm-reset-cursor-point)))
         (when (> (length arg) (- end start))
@@ -829,7 +844,7 @@ Argument ARG is passed to `yank'"
                               ;; trick yank-pop
                               'yank))
               (yank-undo-function (lambda (_start _end) (vterm-undo)))
-              ((symbol-function 'insert-for-yank) #'vterm-send-string)
+              ((symbol-function 'insert-for-yank) #'vterm-insert)
               (inhibit-read-only t))
       (yank-pop arg)))
   ;; yank-pop messed wit this
