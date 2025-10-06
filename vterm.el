@@ -40,13 +40,21 @@
          (signal (car err) (cdr err))))
 
 ;; a maintenance gotcha with vterm-module.c term_process_key
-(defconst vterm--keys '(tab backtab iso-lefttab backspace escape
+(defconst vterm--keys '(return tab backtab iso-lefttab backspace escape
                         up down left right
                         insert delete home end prior next
                         f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
                         kp-0 kp-1 kp-2 kp-3 kp-4 kp-5 kp-6 kp-7 kp-8 kp-9
                         kp-add kp-subtract kp-multiply kp-divide kp-equal
                         kp-decimal kp-separator kp-enter))
+
+(dolist (key vterm--keys)
+  (let ((fun (concat "vterm-send-" (symbol-name key))))
+    (defalias (intern fun)
+      (lambda ()
+        (interactive)
+        (vterm-send-key (key-description (vector key)))))
+    (make-obsolete (intern fun) nil "0.0.4")))
 
 (declare-function vterm--reset-cursor-point "vterm-module")
 (declare-function vterm--get-pwd-raw "vterm-module")
@@ -456,8 +464,8 @@ Only background is used."
     ;; Mouse shit
     (define-key map [mouse-1] #'vterm-mouse-set-point)
 
-    ;; Tell term_process-key "<return>".
-    (dolist (ret '(return M-return S-return C-return))
+    ;; Modifier return
+    (dolist (ret '(M-return S-return C-return))
       (define-key map (vector ret) #'vterm--self-insert))
 
     ;; vterm.el bespoke bindings
