@@ -15,10 +15,10 @@ else
 endif
 
 .PHONY: compile
-compile: $(CURDIR)/deps/archives/gnu/archive-contents vterm-module$(SOEXT)
+compile: deps/archives/gnu/archive-contents vterm-module$(SOEXT)
 	$(EMACS) -batch \
 	  --eval "(setq byte-compile-error-on-warn t)" \
-	  --eval "(setq package-user-dir \"$(CURDIR)/deps\")" \
+	  --eval "(setq package-user-dir \"deps\")" \
 	  -f package-initialize \
 	  -L . -L test \
 	  -f batch-byte-compile $(ELSRC) $(TESTSRC); \
@@ -53,18 +53,18 @@ define install-recipe
 	$(MAKE) dist
 	( \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
-	$(EMACS) --batch -l package --eval "(setq package-user-dir $(1))" \
+	$(EMACS) --batch -l package --eval "(setq package-user-dir (expand-file-name $(1)))" \
 	  -f package-initialize \
 	  --eval "(ignore-errors (apply (function package-delete) (alist-get (quote vterm) package-alist)))" \
 	  -f package-refresh-contents \
 	  --eval "(package-install-file \"$${PKG_NAME}.tar\")"; \
-	PKG_DIR=`$(EMACS) -batch -l package --eval "(setq package-user-dir $(1))" -f package-initialize --eval "(princ (package-desc-dir (car (alist-get 'vterm package-alist))))"`; \
+	PKG_DIR=`$(EMACS) -batch -l package --eval "(setq package-user-dir (expand-file-name $(1)))" -f package-initialize --eval "(princ (package-desc-dir (car (alist-get 'vterm package-alist))))"`; \
 	)
 	$(MAKE) dist-clean
 endef
 
-$(CURDIR)/deps/archives/gnu/archive-contents:
-	$(call install-recipe,\"$(CURDIR)/deps\")
+deps/archives/gnu/archive-contents:
+	$(call install-recipe,\"deps\")
 
 .PHONY: install
 install:
