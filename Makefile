@@ -9,7 +9,7 @@ ifneq ($(BEAR),)
 endif
 
 ifeq ($(shell uname -s),Darwin)
-	SOEXT := .dylib
+	SOEXT := .so
 else
 	SOEXT := .so
 endif
@@ -45,7 +45,7 @@ dist: dist-clean vterm-module$(SOEXT)
 	$(EMACS) -batch -L . -l vterm-package -f vterm-package-inception
 	( \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
-	rsync -R vterm-module$(SOEXT) $(ELSRC) $${PKG_NAME}; \
+	rsync -R vterm-module$(SOEXT) $(ELSRC) $${PKG_NAME} && \
 	tar cf $${PKG_NAME}.tar $${PKG_NAME}; \
 	)
 
