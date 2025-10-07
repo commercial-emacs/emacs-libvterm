@@ -18,7 +18,7 @@ endif
 compile: deps/archives/gnu/archive-contents vterm-module$(SOEXT)
 	$(EMACS) -batch \
 	  --eval "(setq byte-compile-error-on-warn t)" \
-	  --eval "(setq package-user-dir \"deps\")" \
+	  --eval "(setq package-user-dir (expand-file-name \"deps\"))" \
 	  -f package-initialize \
 	  -L . -L test \
 	  -f batch-byte-compile $(ELSRC) $(TESTSRC); \
