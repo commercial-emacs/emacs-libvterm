@@ -2,7 +2,8 @@
 -------
 Install
 -------
-make install
+git clone https://github.com/commercial-emacs/emacs-libvterm.git
+make -C emacs-libvterm install
 
 ------------------------------------------------
 How this fork differs from akermu/emacs-libvterm
