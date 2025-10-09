@@ -481,10 +481,8 @@ static void refresh_scrollback(Term *term, emacs_env *env) {
 
     term->linenum += term->sb_pending;
     del_cnt = term->linenum - max_line_count; /* extra lines at the bottom */
-    /* buf_index is negative,so we move to end of buffer,then backward
-       -buf_index lines. goto lines backward is effectively when
-       vterm-max-scrollback is a large number.
-     */
+    /* buf_index is negative. Moving backward from end is faster when
+       vterm-max-scrollback is large. */
     int buf_index = -(term->height + del_cnt);
     goto_line(env, buf_index);
     refresh_lines(term, env, -term->sb_pending, 0, term->width);
@@ -496,9 +494,7 @@ static void refresh_scrollback(Term *term, emacs_env *env) {
   del_cnt = term->linenum - max_line_count;
   if (del_cnt > 0) {
     term->linenum -= del_cnt;
-    /* -del_cnt is negative,so we delete_lines from end of buffer.
-       this line means: delete del_cnt count of lines at end of buffer.
-     */
+    /* Delete last del_cnt rows (-del_cnt means "from end") */
     delete_lines(env, -del_cnt, del_cnt, true);
   }
 
@@ -506,36 +502,39 @@ static void refresh_scrollback(Term *term, emacs_env *env) {
   term->height_resize = 0;
 }
 
-static void adjust_topline(Term *term, emacs_env *env) {
+static void adjust_topline(Term *term, emacs_env *env,
+			   emacs_value windows,
+			   int n_windows,
+			   emacs_value *w_starts) {
   VTermState *state = vterm_obtain_state(term->vt);
   VTermPos pos;
   vterm_state_get_cursorpos(state, &pos);
 
-  /* pos.row-term->height is negative,so we backward term->height-pos.row
-   * lines from end of buffer
-   */
-
+  // Set emacs's point to vterm's cursor.  Bro believes going from
+  // bottom is appreciably faster.
   goto_line(env, pos.row - term->height);
   goto_col(term, env, pos.row, pos.col);
 
-  emacs_value windows = get_buffer_window_list(env);
-  emacs_value swindow = selected_window(env);
-  int winnum = env->extract_integer(env, length(env, windows));
-  for (int i = 0; i < winnum; ++i) {
-    emacs_value window = nth(env, i, windows);
-    if (eq(env, window, swindow)) {
-      int win_body_height =
-          env->extract_integer(env, window_body_height(env, window));
+  emacs_value selected = selected_window(env);
+  emacs_value pt = point(env);
+  for (int i = 0, ipt = env->extract_integer(env, pt);
+       i < n_windows; ++i) {
+    emacs_value w = nth(env, i, windows);
+    if (eq(env, w, selected)) {
+      int w_height = env->extract_integer(env, window_body_height(env, w));
 
-      /* recenter:If ARG is negative, it counts up from the bottom of the
-       * window.  (ARG should be less than the height of the window ) */
-      if (term->height - pos.row <= win_body_height) {
-        recenter(env, env->make_integer(env, pos.row - term->height));
-      } else {
+      if (term->height - pos.row <= w_height) {
+	// remaining screen fits, set window top such that
+	// screen bottom is flush with window bottom.
         recenter(env, env->make_integer(env, pos.row));
+      } else {
+	// whole screen (term) won't fit, align term and window tops
+        recenter(env, env->make_integer(env, pos.row - term->height));
       }
-    } else if (env->is_not_nil(env, window)) {
-      set_window_point(env, window, point(env));
+    } else if (env->extract_integer(env, w_starts[i]) < ipt) {
+      set_window_point(env, w, w_starts[i]);
+    } else {
+      set_window_point(env, w, pt);
     }
   }
 }
@@ -604,12 +603,22 @@ static void term_redraw(Term *term, emacs_env *env) {
   term_redraw_cursor(term, env);
 
   if (term->is_invalidated) {
+    emacs_value windows = get_buffer_window_list(env);
+    const int n_windows = env->extract_integer(env, length(env, windows));
+    emacs_value *w_starts = (emacs_value *)malloc(n_windows * sizeof(emacs_value));
+
+    for (int i = 0; i < n_windows; ++i) {
+      emacs_value w = nth(env, i, windows);
+      w_starts[i] = window_point(env, w);
+    }
+
     int oldlinenum = term->linenum;
     refresh_scrollback(term, env);
     refresh_screen(term, env);
     term->linenum_added = term->linenum - oldlinenum;
-    adjust_topline(term, env);
+    adjust_topline(term, env, windows, n_windows, w_starts);
     term->linenum_added = 0;
+    free(w_starts);
   }
 
   if (term->title_changed) {
@@ -1359,6 +1368,7 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Frecenter = env->make_global_ref(env, env->intern(env, "recenter"));
   Fset_window_point =
       env->make_global_ref(env, env->intern(env, "set-window-point"));
+  Fwindow_point = env->make_global_ref(env, env->intern(env, "window-point"));
   Fwindow_body_height =
       env->make_global_ref(env, env->intern(env, "window-body-height"));
 

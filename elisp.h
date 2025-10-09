@@ -44,6 +44,7 @@ extern emacs_value Fgoto_line;
 extern emacs_value Fdelete_lines;
 extern emacs_value Frecenter;
 extern emacs_value Fset_window_point;
+extern emacs_value Fwindow_point;
 extern emacs_value Fwindow_body_height;
 extern emacs_value Fpoint;
 
@@ -79,6 +80,7 @@ void set_cursor_blink(emacs_env *env, bool blink);
 void delete_lines(emacs_env *env, int linenum, int count, bool del_whole_line);
 void recenter(emacs_env *env, emacs_value pos);
 void set_window_point(emacs_env *env, emacs_value win, emacs_value point);
+emacs_value window_point(emacs_env *env, emacs_value win);
 emacs_value window_body_height(emacs_env *env, emacs_value win);
 emacs_value point(emacs_env *env);
 bool eq(emacs_env *env, emacs_value e1, emacs_value e2);

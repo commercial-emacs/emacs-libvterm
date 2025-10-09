@@ -459,7 +459,7 @@ Only background is used."
       (dolist (mod '("C-" "M-"))
         (define-key map (vector (intern (concat mod dir))) #'vterm--self-insert)))
 
-    ;; Take tighter control with Shift-PgUp and Shift-PgDn
+    ;; Modifier PgUp and PgDn
     (define-key map [S-prior] #'vterm--copy-mode-then)
     (define-key map [S-next] #'vterm--copy-mode-then)
 
@@ -489,7 +489,6 @@ Only background is used."
     (define-key map (kbd "C-c C-y") #'vterm--copy-mode-done-then)
     (define-key map [remap self-insert-command] 'vterm--copy-mode-done-then)
     (define-key map [return] #'vterm-copy-mode-done)
-    (define-key map (kbd "RET") #'vterm-copy-mode-done)
     (define-key map (kbd "C-c C-r") #'vterm-reset-cursor-point)
     (define-key map (kbd "C-c C-n") #'vterm-next-prompt)
     (define-key map (kbd "C-c C-p") #'vterm-previous-prompt)
@@ -708,6 +707,9 @@ typically used to copy text from vterm buffers."
   (when vterm--term ;avoid segv if calling outside vterm buffer
     (dolist (key (vterm--translate-event-to-args
                   last-command-event))
+      ;; Hack: escape hatch back to cursor should window-point be set
+      (when (equal (car key) "<return>")
+        (vterm-reset-cursor-point))
       (apply #'vterm-send-key key))))
 
 (defun vterm-send-key (key &optional shift meta ctrl)
