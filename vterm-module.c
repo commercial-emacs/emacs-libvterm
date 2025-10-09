@@ -581,22 +581,21 @@ static void term_redraw_cursor(Term *term, emacs_env *env) {
 
     if (!term->cursor.cursor_visible) {
       set_cursor_type(env, Qnil);
-      return;
-    }
-
-    switch (term->cursor.cursor_type) {
-    case VTERM_PROP_CURSORSHAPE_BLOCK:
-      set_cursor_type(env, Qbox);
-      break;
-    case VTERM_PROP_CURSORSHAPE_UNDERLINE:
-      set_cursor_type(env, Qhbar);
-      break;
-    case VTERM_PROP_CURSORSHAPE_BAR_LEFT:
-      set_cursor_type(env, Qbar);
-      break;
-    default:
-      set_cursor_type(env, Qt);
-      break;
+    } else {
+      switch (term->cursor.cursor_type) {
+      case VTERM_PROP_CURSORSHAPE_BLOCK:
+	set_cursor_type(env, Qbox);
+	break;
+      case VTERM_PROP_CURSORSHAPE_UNDERLINE:
+	set_cursor_type(env, Qhbar);
+	break;
+      case VTERM_PROP_CURSORSHAPE_BAR_LEFT:
+	set_cursor_type(env, Qbar);
+	break;
+      default:
+	set_cursor_type(env, Qt);
+	break;
+      }
     }
   }
 }
