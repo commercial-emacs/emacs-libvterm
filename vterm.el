@@ -399,6 +399,8 @@ Only background is used."
                    ;; (mouse-yank-primary . vterm-yank-primary)
                    ;; (xterm-paste . vterm-xterm-paste)
                    (recenter-top-bottom . vterm-clear)
+                   (beginning-of-buffer . vterm--copy-mode-then)
+                   (end-of-buffer . vterm--copy-mode-then)
                    (previous-line . vterm--copy-mode-then)
                    (next-line . vterm--copy-mode-then)))
          (remap-keys
@@ -458,8 +460,8 @@ Only background is used."
         (define-key map (vector (intern (concat mod dir))) #'vterm--self-insert)))
 
     ;; Take tighter control with Shift-PgUp and Shift-PgDn
-    (define-key map [S-prior] #'scroll-down-command)
-    (define-key map [S-next] #'scroll-up-command)
+    (define-key map [S-prior] #'vterm--copy-mode-then)
+    (define-key map [S-next] #'vterm--copy-mode-then)
 
     ;; Mouse shit
     (define-key map [mouse-1] #'vterm-mouse-set-point)
