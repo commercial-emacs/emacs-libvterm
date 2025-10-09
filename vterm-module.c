@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <vterm.h>
 #include <assert.h>
-#include <sys/gmon.h>
 
 static LineInfo *alloc_lineinfo() {
   LineInfo *info = malloc(sizeof(LineInfo));
