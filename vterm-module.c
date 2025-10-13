@@ -502,10 +502,10 @@ static void refresh_scrollback(Term *term, emacs_env *env) {
   term->height_resize = 0;
 }
 
-static void adjust_topline(Term *term, emacs_env *env,
-			   emacs_value windows,
-			   int n_windows,
-			   emacs_value *w_starts) {
+static void adjust_window_point(Term *term, emacs_env *env,
+				emacs_value windows,
+				int n_windows,
+				emacs_value *w_points) {
   VTermState *state = vterm_obtain_state(term->vt);
   VTermPos pos;
   vterm_state_get_cursorpos(state, &pos);
@@ -530,9 +530,9 @@ static void adjust_topline(Term *term, emacs_env *env,
 	// whole screen (term) won't fit, align term and window tops
         recenter(env, env->make_integer(env, pos.row - term->height));
       }
-    } else if (env->extract_integer(env, w_starts[i])
+    } else if (env->extract_integer(env, w_points[i])
 	       < env->extract_integer(env, pt)) {
-      set_window_start(env, w, w_starts[i]);
+      set_window_point(env, w, w_points[i]);
     } else {
       set_window_point(env, w, pt);
     }
@@ -605,20 +605,23 @@ static void term_redraw(Term *term, emacs_env *env) {
   if (term->is_invalidated) {
     emacs_value windows = get_buffer_window_list(env);
     const int n_windows = env->extract_integer(env, length(env, windows));
-    emacs_value *w_starts = (emacs_value *)malloc(n_windows * sizeof(emacs_value));
+    emacs_value *w_points = (emacs_value *)malloc(n_windows * sizeof(emacs_value));
 
     for (int i = 0; i < n_windows; ++i) {
       emacs_value w = nth(env, i, windows);
-      w_starts[i] = window_start(env, w);
+      w_points[i] = window_point(env, w);
+      fprintf(stderr, "wtf %d point=%ld start=%ld\n",
+	      i, env->extract_integer(env, w_points[i]),
+	      env->extract_integer(env, window_start(env, w)));
     }
 
     int oldlinenum = term->linenum;
     refresh_scrollback(term, env);
     refresh_screen(term, env);
     term->linenum_added = term->linenum - oldlinenum;
-    adjust_topline(term, env, windows, n_windows, w_starts);
+    adjust_window_point(term, env, windows, n_windows, w_points);
     term->linenum_added = 0;
-    free(w_starts);
+    free(w_points);
   }
 
   if (term->title_changed) {
