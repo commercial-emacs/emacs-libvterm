@@ -516,9 +516,9 @@ static void adjust_window_point(Term *term, emacs_env *env,
   goto_col(term, env, pos.row, pos.col);
 
   emacs_value selected = selected_window(env);
+  emacs_value pt = window_point(env, selected);
   for (int i = 0; i < n_windows; ++i) {
     emacs_value w = nth(env, i, windows);
-    emacs_value pt = window_point(env, w);
     if (eq(env, w, selected)) {
       int w_height = env->extract_integer(env, window_body_height(env, w));
 
@@ -531,9 +531,10 @@ static void adjust_window_point(Term *term, emacs_env *env,
         recenter(env, env->make_integer(env, pos.row - term->height));
       }
     } else if (env->extract_integer(env, w_points[i])
-	       < env->extract_integer(env, pt)) {
+	       <= env->extract_integer(env, pt)) {
       set_window_point(env, w, w_points[i]);
     } else {
+      // move it back to selected window's point if past it
       set_window_point(env, w, pt);
     }
   }
@@ -610,9 +611,6 @@ static void term_redraw(Term *term, emacs_env *env) {
     for (int i = 0; i < n_windows; ++i) {
       emacs_value w = nth(env, i, windows);
       w_points[i] = window_point(env, w);
-      fprintf(stderr, "wtf %d point=%ld start=%ld\n",
-	      i, env->extract_integer(env, w_points[i]),
-	      env->extract_integer(env, window_start(env, w)));
     }
 
     int oldlinenum = term->linenum;
