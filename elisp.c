@@ -39,6 +39,8 @@ emacs_value Fforward_line;
 emacs_value Fgoto_line;
 emacs_value Fdelete_lines;
 emacs_value Frecenter;
+emacs_value Fset_window_start;
+emacs_value Fwindow_start;
 emacs_value Fset_window_point;
 emacs_value Fwindow_point;
 emacs_value Fwindow_body_height;
@@ -137,6 +139,14 @@ void recenter(emacs_env *env, emacs_value pos) {
 }
 
 emacs_value point(emacs_env *env) { return env->funcall(env, Fpoint, 0, NULL); }
+
+void set_window_start(emacs_env *env, emacs_value win, emacs_value point) {
+  env->funcall(env, Fset_window_start, 2, (emacs_value[]){win, point});
+}
+
+emacs_value window_start(emacs_env *env, emacs_value win) {
+  return env->funcall(env, Fwindow_start, 1, (emacs_value[]){win});
+}
 
 void set_window_point(emacs_env *env, emacs_value win, emacs_value point) {
   env->funcall(env, Fset_window_point, 2, (emacs_value[]){win, point});

@@ -707,7 +707,7 @@ typically used to copy text from vterm buffers."
   (when vterm--term ;avoid segv if calling outside vterm buffer
     (dolist (key (vterm--translate-event-to-args
                   last-command-event))
-      ;; Hack: escape hatch back to cursor should window-point be set
+      ;; Hack: escape hatch back to cursor should window-start be set
       (when (equal (car key) "<return>")
         (vterm-reset-cursor-point))
       (apply #'vterm-send-key key))))
