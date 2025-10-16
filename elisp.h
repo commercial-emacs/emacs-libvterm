@@ -48,6 +48,8 @@ extern emacs_value Fwindow_start;
 extern emacs_value Fset_window_point;
 extern emacs_value Fwindow_point;
 extern emacs_value Fwindow_body_height;
+extern emacs_value Fminibufferp;
+extern emacs_value Fwindow_buffer;
 extern emacs_value Fpoint;
 
 extern emacs_value Fput_text_property;
@@ -86,6 +88,8 @@ emacs_value window_start(emacs_env *env, emacs_value win);
 void set_window_point(emacs_env *env, emacs_value win, emacs_value point);
 emacs_value window_point(emacs_env *env, emacs_value win);
 emacs_value window_body_height(emacs_env *env, emacs_value win);
+emacs_value window_buffer(emacs_env *env, emacs_value win);
+emacs_value minibufferp(emacs_env *env, emacs_value buf);
 emacs_value point(emacs_env *env);
 bool eq(emacs_env *env, emacs_value e1, emacs_value e2);
 void forward_char(emacs_env *env, emacs_value n);

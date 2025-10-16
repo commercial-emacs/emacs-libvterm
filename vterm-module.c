@@ -506,6 +506,10 @@ static void adjust_window_point(Term *term, emacs_env *env,
 				emacs_value windows,
 				int n_windows,
 				emacs_value *w_points) {
+  emacs_value selected = selected_window(env);
+  if (env->is_not_nil(env, minibufferp(env, window_buffer(env, selected))))
+    return; /* !!! */
+
   VTermState *state = vterm_obtain_state(term->vt);
   VTermPos pos;
   vterm_state_get_cursorpos(state, &pos);
@@ -515,10 +519,10 @@ static void adjust_window_point(Term *term, emacs_env *env,
   goto_line(env, pos.row - term->height);
   goto_col(term, env, pos.row, pos.col);
 
-  emacs_value selected = selected_window(env);
   emacs_value pt = window_point(env, selected);
   for (int i = 0; i < n_windows; ++i) {
     emacs_value w = nth(env, i, windows);
+    fprintf(stderr, "wtf %d %ld\n", i, env->extract_integer(env, w_points[i]));
     if (eq(env, w, selected)) {
       int w_height = env->extract_integer(env, window_body_height(env, w));
 
@@ -1376,6 +1380,8 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Fwindow_body_height =
       env->make_global_ref(env, env->intern(env, "window-body-height"));
 
+  Fminibufferp = env->make_global_ref(env, env->intern(env, "minibufferp"));
+  Fwindow_buffer = env->make_global_ref(env, env->intern(env, "window-buffer"));
   Fpoint = env->make_global_ref(env, env->intern(env, "point"));
   Fforward_char = env->make_global_ref(env, env->intern(env, "forward-char"));
   Fget_buffer_window_list =

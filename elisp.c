@@ -45,6 +45,8 @@ emacs_value Fset_window_point;
 emacs_value Fwindow_point;
 emacs_value Fwindow_body_height;
 emacs_value Fpoint;
+emacs_value Fminibufferp;
+emacs_value Fwindow_buffer;
 emacs_value Fapply;
 
 emacs_value Fput_text_property;
@@ -138,7 +140,17 @@ void recenter(emacs_env *env, emacs_value pos) {
   env->funcall(env, Frecenter, 1, (emacs_value[]){pos});
 }
 
-emacs_value point(emacs_env *env) { return env->funcall(env, Fpoint, 0, NULL); }
+emacs_value minibufferp(emacs_env *env, emacs_value buf) {
+  return env->funcall(env, Fminibufferp, 2, (emacs_value[]){buf, Qnil});
+}
+
+emacs_value window_buffer(emacs_env *env, emacs_value win) {
+  return env->funcall(env, Fwindow_buffer, 1, (emacs_value[]){win});
+}
+
+emacs_value point(emacs_env *env) {
+  return env->funcall(env, Fpoint, 0, NULL);
+}
 
 void set_window_start(emacs_env *env, emacs_value win, emacs_value point) {
   env->funcall(env, Fset_window_start, 2, (emacs_value[]){win, point});
