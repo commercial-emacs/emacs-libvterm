@@ -53,6 +53,7 @@ emacs_value Fput_text_property;
 emacs_value Fset;
 emacs_value Fvterm__flush_output;
 emacs_value Fget_buffer_window_list;
+emacs_value Fvterm__window_string;
 emacs_value Fselected_window;
 emacs_value Fvterm__set_title;
 emacs_value Fvterm__set_directory;
@@ -179,6 +180,10 @@ bool eq(emacs_env *env, emacs_value e1, emacs_value e2) {
 
 void forward_char(emacs_env *env, emacs_value n) {
   env->funcall(env, Fforward_char, 1, (emacs_value[]){n});
+}
+
+emacs_value vterm__window_string(emacs_env *env, emacs_value w) {
+  return env->funcall(env, Fvterm__window_string, 1, (emacs_value[]){w});
 }
 
 emacs_value get_buffer_window_list(emacs_env *env) {

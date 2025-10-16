@@ -66,6 +66,12 @@ typedef struct Cursor {
   bool cursor_blink_changed;
 } Cursor;
 
+typedef struct Window_Record {
+  char id[128];
+  int point;
+  bool redrawing;
+} WRecord;
+
 typedef struct Term {
   VTerm *vt;
   VTermScreen *vts;
@@ -114,6 +120,10 @@ typedef struct Term {
   int width, height;
   int height_resize;
   bool resizing;
+
+#define VTERM_MODULE_MAX_NWIN 16
+  WRecord wrecords[VTERM_MODULE_MAX_NWIN];
+
   bool disable_bold_font;
   bool disable_underline;
   bool disable_inverse_video;

@@ -1073,11 +1073,16 @@ Then triggers a redraw from the module."
                           (let ((inhibit-redisplay t)
                                 (inhibit-read-only t))
                             (vterm--update vterm--term)))))))
-        (if (or (string-prefix-p "vterm" (symbol-name this-command))
+        (if (or (not (symbolp this-command))
+                (string-prefix-p "vterm" (symbol-name this-command))
+                (not (symbolp last-command))
                 (string-prefix-p "vterm" (symbol-name last-command))
                 noninteractive)
             (funcall update (current-buffer))
           (run-with-timer 1 nil update (current-buffer)))))))
+
+(defun vterm--window-string (win)
+  (format "%s" win))
 
 (defun vterm--sentinel (process event)
   "Sentinel of vterm PROCESS.
@@ -1093,11 +1098,7 @@ Argument EVENT process event."
   "Adjust width of window WINDOWS associated to process PROCESS.
 
 `vterm-min-window-width' determines the minimum width allowed."
-  ;; We want `vterm-copy-mode' to resemble a fundamental buffer as much as
-  ;; possible.  Hence, we must not call this function when the minor mode is
-  ;; enabled, otherwise the buffer would be redrawn, messing around with the
-  ;; position of the point.
-  (unless vterm-copy-mode
+  (unless vterm-copy-mode ;otherwise don't mess with buffer or point
     (let* ((size (funcall window-adjust-process-window-size-function
                           process windows))
            (width (car size))
