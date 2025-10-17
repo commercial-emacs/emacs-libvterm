@@ -34,7 +34,8 @@
 	 (wait-refresh (lambda (&rest _args)
 			 (accept-process-output vterm--process 0.05 nil t))))
      (unwind-protect
-	 (with-current-buffer b
+	 (progn
+	   (switch-to-buffer b)
 	   (dolist (f '(vterm-send vterm-send-key vterm-send-string))
 	     (add-function :after (symbol-function f) wait-refresh))
 	   (should (get-buffer-process (current-buffer)))
@@ -134,6 +135,49 @@
       (accept-process-output vterm--process 0.1)
       (goto-char start)
       (should (looking-at (regexp-quote "brown"))))))
+
+(ert-deftest adjust-window-point ()
+  (test-vterm/with-session
+    (should (test-vterm/at-prompt))
+    (test-vterm/run (format "for i in {1..%d} ; do echo the quick brown fox; done"
+			    (window-body-height)))
+    (split-window-below)
+    (should (= 2 (length (get-buffer-window-list))))
+    (call-interactively #'vterm-copy-mode)
+    (call-interactively #'other-window)
+    (call-interactively #'beginning-of-buffer)
+    (should (equal (point-min) (point)))
+    (should (> (count-lines (window-start (selected-window))
+			    (save-excursion
+			      (goto-char (point-max))
+			      (skip-chars-backward "[:space:]")
+			      (point)))
+	       (window-body-height)))
+    (call-interactively #'other-window)
+    (call-interactively #'recenter-top-bottom)
+    (call-interactively #'vterm-copy-mode)
+    (should (test-vterm/at-prompt))
+    (should-not (> (count-lines (window-start (selected-window))
+				(save-excursion
+				  (goto-char (point-max))
+				  (skip-chars-backward "[:space:]")
+				  (point)))
+		   (window-body-height)))
+    (call-interactively #'other-window)
+    (should-not vterm-copy-mode)
+    (should (= (point-min) (length vterm--window-starts)))
+    (should (= (point-min) (vterm--window-start (selected-window))))
+    (should (= (window-start) (point-min)))
+    (let ((last-command-event 'return))
+      (vterm--self-insert))
+    (cl-loop repeat 100
+	     until (test-vterm/at-prompt)
+	     do (sleep-for 0.2)
+	     finally (should (test-vterm/at-prompt)))
+    (should-not vterm--window-starts)))
+
+
+
 
 (provide 'test-vterm)
 ;;; test-vterm.el ends here

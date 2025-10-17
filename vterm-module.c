@@ -502,45 +502,6 @@ static void refresh_scrollback(Term *term, emacs_env *env) {
   term->height_resize = 0;
 }
 
-static WRecord *get_wrecord(Term *term, emacs_env *env, emacs_value w) {
-  emacs_value s = vterm__window_string(env, w);
-  ptrdiff_t len = string_bytes(env, s);
-  unsigned char cs[len];
-  env->copy_string_contents(env, s, (char *)cs, &len);
-  for (int i=0; i<VTERM_MODULE_MAX_NWIN && *term->wrecords[i].id; ++i) {
-    if (0 == strncmp(term->wrecords[i].id, cs, 127)) {
-      fprintf(stderr, "got %s s=%d, rd=%d\n",
-	      term->wrecords[i].id, term->wrecords[i].point,
-	      term->wrecords[i].redrawing);
-      return &term->wrecords[i];
-    }
-  }
-  return NULL;
-}
-
-static void put_wrecord(Term *term, emacs_env *env, emacs_value w,
-			int start, bool redrawing) {
-  emacs_value s = vterm__window_string(env, w);
-  ptrdiff_t len = string_bytes(env, s);
-  unsigned char cs[len];
-  env->copy_string_contents(env, s, (char *)cs, &len);
-  int i = 0;
-  for (; i<VTERM_MODULE_MAX_NWIN && *term->wrecords[i].id; ++i) {
-    if (0 == strncmp(term->wrecords[i].id, cs, 128)) {
-      term->wrecords[i].point = start;
-      term->wrecords[i].redrawing = redrawing;
-      fprintf(stderr, "put %s s=%d, rd=%d at %d\n", cs, start, redrawing, i);
-      return;
-    }
-  }
-  if (i < VTERM_MODULE_MAX_NWIN) {
-    snprintf(term->wrecords[i].id, 128, "%s", cs);
-    term->wrecords[i].point = start;
-    term->wrecords[i].redrawing = redrawing;
-    fprintf(stderr, "put %s s=%d, rd=%d at %d\n", cs, start, redrawing, i);
-  }
-}
-
 static void adjust_window_point(Term *term, emacs_env *env) {
   VTermState *state = vterm_obtain_state(term->vt);
   VTermPos pos;
@@ -557,39 +518,9 @@ static void adjust_window_point(Term *term, emacs_env *env) {
   const int n_windows = env->extract_integer(env, length(env, windows));
   const int ipt = env->extract_integer(env, pt);
 
-  /* Match WRECORDS to the latest windows.  */
-  int j = 0;
   for (int i = 0; i < n_windows; ++i) {
     emacs_value w = nth(env, i, windows);
-    emacs_value s = vterm__window_string(env, w);
-    ptrdiff_t len = string_bytes(env, s);
-    unsigned char cs[len];
-    env->copy_string_contents(env, s, (char *)cs, &len);
-    for (int k=j; k<VTERM_MODULE_MAX_NWIN && *term->wrecords[k].id; ++k) {
-      if (0 == strncmp(term->wrecords[k].id, cs, 127)) {
-	if (j != k) {
-	  WRecord swap = term->wrecords[j];
-	  term->wrecords[j] = term->wrecords[k];
-	  term->wrecords[k] = swap;
-	  fprintf(stderr, "displacing %s s=%d, rd=%d\n",
-		  term->wrecords[k].id, term->wrecords[k].point,
-		  term->wrecords[k].redrawing);
-	}
-	fprintf(stderr, "storing %s s=%d, rd=%d\n",
-		term->wrecords[j].id, term->wrecords[j].point,
-		term->wrecords[j].redrawing);
-
-	++j;
-	break;
-      }
-    }
-  }
-  for (; j < VTERM_MODULE_MAX_NWIN; ++j) {
-    term->wrecords[j] = (WRecord){0};
-  }
-
-  for (int i = 0; i < n_windows; ++i) {
-    emacs_value w = nth(env, i, windows);
+    emacs_value start = vterm__window_start(env, w);
     if (eq(env, w, selected)) {
       int w_height = env->extract_integer(env, window_body_height(env, w));
       if (term->height - pos.row <= w_height) {
@@ -600,25 +531,10 @@ static void adjust_window_point(Term *term, emacs_env *env) {
 	// whole screen (term) won't fit, align term and window tops
         recenter(env, env->make_integer(env, pos.row - term->height));
       }
-      const int wp = env->extract_integer(env, window_point(env, w));
-      put_wrecord(term, env, w, wp, false);
+    } else if (env->is_not_nil(env, start)) {
+      set_window_start(env, w, start);
     } else {
-      const int wp = env->extract_integer(env, window_point(env, w));
-      const WRecord *record = get_wrecord(term, env, w);
-      if (!record) {
-	put_wrecord(term, env, w, wp, false);
-      } else if (!record->redrawing) {
-	if (wp == 1) {
-	  put_wrecord(term, env, w, record->point, true);
-	  set_window_point(env, w, env->make_integer(env, record->point));
-	} else {
-	  put_wrecord(term, env, w, wp, false);
-	  set_window_point(env, w, env->make_integer(env, record->point));
-	}
-      } else if (ipt >= record->point) {
-	put_wrecord(term, env, w, record->point, false);
-	set_window_point(env, w, env->make_integer(env, record->point));
-      }
+      set_window_point(env, w, pt);
     }
   }
 }
@@ -1455,6 +1371,8 @@ int emacs_module_init(struct emacs_runtime *ert) {
       env->make_global_ref(env, env->intern(env, "get-buffer-window-list"));
   Fvterm__window_string =
       env->make_global_ref(env, env->intern(env, "vterm--window-string"));
+  Fvterm__window_start =
+      env->make_global_ref(env, env->intern(env, "vterm--window-start"));
   Fselected_window =
       env->make_global_ref(env, env->intern(env, "selected-window"));
 

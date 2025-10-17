@@ -250,6 +250,7 @@ That globalized minor mode interferes with our control over blink."
 (make-obsolete 'vterm-use-vterm-prompt-detection-method nil "0.0.4")
 (make-obsolete 'vterm-bookmark-check-dir nil "0.0.4")
 (defvar-local vterm--exit-copy-mode-function nil)
+(defvar-local vterm--window-starts nil)
 
 (defface vterm-color-black
   `((t :inherit term-color-black))
@@ -660,6 +661,14 @@ for, or t to get the default shell for all methods."
             (save-excursion (goto-char (car cell))
                             (insert (cdr cell))))
           (sort line-wraps (lambda (a b) (< (car a) (car b))))))
+  (let ((last-nonspace (save-excursion
+                         (goto-char (point-max))
+                         (skip-chars-backward "[:space:]")
+                         (point))))
+    (dolist (win (get-buffer-window-list))
+      (when (> (count-lines (window-start win) last-nonspace)
+               (window-body-height))
+        (setf (alist-get win vterm--window-starts) (window-start win)))))
   (vterm-reset-cursor-point)
   (use-local-map vterm-mode-map)
   (vterm-send-start)
@@ -709,7 +718,9 @@ typically used to copy text from vterm buffers."
                   last-command-event))
       ;; Hack: escape hatch back to cursor should window-start be set
       (when (equal (car key) "<return>")
-        (vterm-reset-cursor-point))
+        (vterm-reset-cursor-point)
+        (setq vterm--window-starts
+              (assq-delete-all (selected-window) vterm--window-starts)))
       (apply #'vterm-send-key key))))
 
 (defun vterm-send-key (key &optional shift meta ctrl)
@@ -1083,6 +1094,14 @@ Then triggers a redraw from the module."
 
 (defun vterm--window-string (win)
   (format "%s" win))
+
+(defun vterm--window-start (win)
+  (when-let ((start (alist-get win vterm--window-starts)))
+    (if (< start (point-max))
+        start
+      (prog1 nil
+        (setq vterm--window-starts
+              (assq-delete-all win vterm--window-starts))))))
 
 (defun vterm--sentinel (process event)
   "Sentinel of vterm PROCESS.
