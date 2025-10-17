@@ -423,7 +423,7 @@ Only background is used."
     ;; 127: DEL
     (dotimes (i 128)
       (let ((key (char-to-string i)))
-        (unless (member key remap-keys)
+        (unless (member (kbd (key-description key)) remap-keys)
           (define-key map key 'vterm--self-insert))))
 
     ;; As emacs users, we want C-SPC to get mapped to C-@ (set-mark)
@@ -434,7 +434,7 @@ Only background is used."
 
     ;; Self-insert M-a through M-z
     (define-key map (vector meta-prefix-char) (make-keymap)) ;M- now a prefix
-    (dotimes (i (- ?z ?a))
+    (dotimes (i (1+ (- ?z ?a)))
       (let ((key (vector meta-prefix-char (+ ?a i))))
         (unless (member (kbd (key-description key)) remap-keys)
           (define-key map key 'vterm--self-insert))))
