@@ -4,6 +4,7 @@ CSRC := $(shell git ls-files *.[ch])
 ELSRC := $(shell git ls-files *.el)
 TESTSRC := $(shell git ls-files test/*.el)
 BEAR := $(shell command -v bear 2>/dev/null)
+INSTALLDIR ?= package-user-dir
 ifneq ($(BEAR),)
 	BEAR := $(BEAR) --
 endif
@@ -35,6 +36,7 @@ test: compile
 .PHONY: dist-clean
 dist-clean:
 	( \
+	set -e; \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
 	rm -rf $${PKG_NAME}; \
 	rm -rf $${PKG_NAME}.tar; \
@@ -44,6 +46,7 @@ dist-clean:
 dist: dist-clean vterm-module$(SOEXT)
 	$(EMACS) -batch -L . -l vterm-package -f vterm-package-inception
 	( \
+	set -e; \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
 	rsync -R vterm-module$(SOEXT) $(ELSRC) $${PKG_NAME} && \
 	tar cf $${PKG_NAME}.tar $${PKG_NAME}; \
@@ -52,6 +55,7 @@ dist: dist-clean vterm-module$(SOEXT)
 define install-recipe
 	$(MAKE) dist
 	( \
+	set -e; \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
 	$(EMACS) --batch -l package --eval "(setq package-user-dir (expand-file-name $(1)))" \
 	  -f package-initialize \
@@ -68,4 +72,4 @@ deps/archives/gnu/archive-contents:
 
 .PHONY: install
 install:
-	$(call install-recipe,package-user-dir)
+	$(call install-recipe,$(INSTALLDIR))
