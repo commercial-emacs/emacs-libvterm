@@ -56,19 +56,21 @@ define install-recipe
 	$(MAKE) dist
 	( \
 	set -e; \
+	INSTALL_PATH=$(1); \
+	if [[ "$${INSTALL_PATH}" == /* ]]; then INSTALL_PATH=\"$${INSTALL_PATH}\"; fi; \
 	PKG_NAME=`$(EMACS) -batch -L . -l vterm-package --eval "(princ (vterm-package-name))"`; \
-	$(EMACS) --batch -l package --eval "(setq package-user-dir (expand-file-name $(1)))" \
+	$(EMACS) --batch -l package --eval "(setq package-user-dir (expand-file-name $${INSTALL_PATH}))" \
 	  -f package-initialize \
 	  --eval "(ignore-errors (apply (function package-delete) (alist-get (quote vterm) package-alist)))" \
 	  -f package-refresh-contents \
 	  --eval "(package-install-file \"$${PKG_NAME}.tar\")"; \
-	PKG_DIR=`$(EMACS) -batch -l package --eval "(setq package-user-dir (expand-file-name $(1)))" -f package-initialize --eval "(princ (package-desc-dir (car (alist-get 'vterm package-alist))))"`; \
+	PKG_DIR=`$(EMACS) -batch -l package --eval "(setq package-user-dir (expand-file-name $${INSTALL_PATH}))" -f package-initialize --eval "(princ (package-desc-dir (car (alist-get 'vterm package-alist))))"`; \
 	)
 	$(MAKE) dist-clean
 endef
 
 deps/archives/gnu/archive-contents:
-	$(call install-recipe,\"deps\")
+	$(call install-recipe,$(CURDIR)/deps)
 
 .PHONY: install
 install:
