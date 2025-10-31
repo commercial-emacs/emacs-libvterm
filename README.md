@@ -14,7 +14,7 @@ C-c C-y pastes from emacs's kill ring (subsequent M-y from same).
 
 C-c C-y also exits VTermCopy mode to paste a just copied region.
 
-Any non-prefixed (C-c) key sequence exits VTermCopy mode.
+Any "normal typing" (non-prefixed) key exits VTermCopy mode.
 
 C-p immediately enters VTermCopy mode.
 
