@@ -512,6 +512,8 @@ static void adjust_window_point(Term *term, emacs_env *env) {
   goto_line(env, pos.row - term->height);
   goto_col(term, env, pos.row, pos.col);
 
+  // nota bene minibuffer_selected_window, not selected_window, holds
+  // the last selected window while minibuffer is active.
   emacs_value selected = selected_window(env);
   emacs_value pt = point(env);
   emacs_value windows = get_buffer_window_list(env);
@@ -521,7 +523,9 @@ static void adjust_window_point(Term *term, emacs_env *env) {
   for (int i = 0; i < n_windows; ++i) {
     emacs_value w = nth(env, i, windows);
     emacs_value start = vterm__window_start(env, w);
-    if (eq(env, w, selected)) {
+    if (env->is_not_nil(env, start)) {
+      set_window_start(env, w, start);
+    } else if (eq(env, w, selected)) {
       int w_height = env->extract_integer(env, window_body_height(env, w));
       if (term->height - pos.row <= w_height) {
 	// remaining screen fits, set window top such that
@@ -531,8 +535,6 @@ static void adjust_window_point(Term *term, emacs_env *env) {
 	// whole screen (term) won't fit, align term and window tops
         recenter(env, env->make_integer(env, pos.row - term->height));
       }
-    } else if (env->is_not_nil(env, start)) {
-      set_window_start(env, w, start);
     } else {
       set_window_point(env, w, pt);
     }
@@ -1375,6 +1377,8 @@ int emacs_module_init(struct emacs_runtime *ert) {
       env->make_global_ref(env, env->intern(env, "vterm--window-start"));
   Fselected_window =
       env->make_global_ref(env, env->intern(env, "selected-window"));
+  Fminibuffer_selected_window =
+      env->make_global_ref(env, env->intern(env, "minibuffer-selected-window"));
 
   Fvterm__set_title =
       env->make_global_ref(env, env->intern(env, "vterm--set-title"));

@@ -56,6 +56,7 @@ emacs_value Fget_buffer_window_list;
 emacs_value Fvterm__window_string;
 emacs_value Fvterm__window_start;
 emacs_value Fselected_window;
+emacs_value Fminibuffer_selected_window;
 emacs_value Fvterm__set_title;
 emacs_value Fvterm__set_directory;
 emacs_value Feq;
@@ -198,6 +199,10 @@ emacs_value get_buffer_window_list(emacs_env *env) {
 
 emacs_value selected_window(emacs_env *env) {
   return env->funcall(env, Fselected_window, 0, (emacs_value[]){});
+}
+
+emacs_value minibuffer_selected_window(emacs_env *env) {
+  return env->funcall(env, Fminibuffer_selected_window, 0, (emacs_value[]){});
 }
 
 void set_cursor_type(emacs_env *env, emacs_value cursor_type) {

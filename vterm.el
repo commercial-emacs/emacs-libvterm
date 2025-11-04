@@ -669,6 +669,8 @@ for, or t to get the default shell for all methods."
       (when (> (count-lines (window-start win) last-nonspace)
                (window-body-height))
         (setf (alist-get win vterm--window-starts) (window-start win)))))
+  (setq vterm--window-starts
+        (assq-delete-all (selected-window) vterm--window-starts))
   (vterm-reset-cursor-point)
   (use-local-map vterm-mode-map)
   (vterm-send-start)
