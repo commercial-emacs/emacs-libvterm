@@ -530,10 +530,10 @@ static void adjust_window_point(Term *term, emacs_env *env) {
       if (term->height - pos.row <= w_height) {
 	// remaining screen fits, set window top such that
 	// screen bottom is flush with window bottom.
-        recenter(env, env->make_integer(env, pos.row));
+        // recenter(env, env->make_integer(env, pos.row));
       } else {
 	// whole screen (term) won't fit, align term and window tops
-        recenter(env, env->make_integer(env, pos.row - term->height));
+        // recenter(env, env->make_integer(env, pos.row - term->height));
       }
     } else {
       set_window_point(env, w, pt);
