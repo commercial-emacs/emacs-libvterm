@@ -38,7 +38,6 @@ emacs_value Fforward_char;
 emacs_value Fforward_line;
 emacs_value Fgoto_line;
 emacs_value Fdelete_lines;
-emacs_value Frecenter;
 emacs_value Fset_window_start;
 emacs_value Fwindow_start;
 emacs_value Fset_window_point;
@@ -137,10 +136,6 @@ void delete_lines(emacs_env *env, int linenum, int count, bool del_whole_line) {
   emacs_value Qcount = env->make_integer(env, count);
   env->funcall(env, Fdelete_lines, 3,
 	       (emacs_value[]){Qlinenum, Qcount, del_whole_line ? Qt : Qnil});
-}
-
-void recenter(emacs_env *env, emacs_value pos) {
-  env->funcall(env, Frecenter, 1, (emacs_value[]){pos});
 }
 
 emacs_value minibufferp(emacs_env *env, emacs_value buf) {

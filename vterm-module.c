@@ -525,17 +525,7 @@ static void adjust_window_point(Term *term, emacs_env *env) {
     emacs_value start = vterm__window_start(env, w);
     if (env->is_not_nil(env, start)) {
       set_window_start(env, w, start);
-    } else if (eq(env, w, selected)) {
-      int w_height = env->extract_integer(env, window_body_height(env, w));
-      if (term->height - pos.row <= w_height) {
-	// remaining screen fits, set window top such that
-	// screen bottom is flush with window bottom.
-        // recenter(env, env->make_integer(env, pos.row));
-      } else {
-	// whole screen (term) won't fit, align term and window tops
-        // recenter(env, env->make_integer(env, pos.row - term->height));
-      }
-    } else {
+    } else if (!eq(env, w, selected)) {
       set_window_point(env, w, pt);
     }
   }
@@ -1355,7 +1345,6 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Fgoto_line = env->make_global_ref(env, env->intern(env, "vterm--goto-line"));
   Fdelete_lines =
       env->make_global_ref(env, env->intern(env, "vterm--delete-lines"));
-  Frecenter = env->make_global_ref(env, env->intern(env, "recenter"));
   Fset_window_start =
       env->make_global_ref(env, env->intern(env, "set-window-start"));
   Fwindow_start = env->make_global_ref(env, env->intern(env, "window-start"));
