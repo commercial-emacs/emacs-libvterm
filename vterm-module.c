@@ -1351,8 +1351,6 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Fset_window_point =
       env->make_global_ref(env, env->intern(env, "set-window-point"));
   Fwindow_point = env->make_global_ref(env, env->intern(env, "window-point"));
-  Fwindow_body_height =
-      env->make_global_ref(env, env->intern(env, "window-body-height"));
 
   Fminibufferp = env->make_global_ref(env, env->intern(env, "minibufferp"));
   Fwindow_buffer = env->make_global_ref(env, env->intern(env, "window-buffer"));

@@ -42,7 +42,6 @@ emacs_value Fset_window_start;
 emacs_value Fwindow_start;
 emacs_value Fset_window_point;
 emacs_value Fwindow_point;
-emacs_value Fwindow_body_height;
 emacs_value Fpoint;
 emacs_value Fminibufferp;
 emacs_value Fwindow_buffer;
@@ -164,10 +163,6 @@ void set_window_point(emacs_env *env, emacs_value win, emacs_value point) {
 
 emacs_value window_point(emacs_env *env, emacs_value win) {
   return env->funcall(env, Fwindow_point, 1, (emacs_value[]){win});
-}
-
-emacs_value window_body_height(emacs_env *env, emacs_value win) {
-  return env->funcall(env, Fwindow_body_height, 1, (emacs_value[]){win});
 }
 
 bool eq(emacs_env *env, emacs_value e1, emacs_value e2) {
