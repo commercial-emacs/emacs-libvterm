@@ -796,6 +796,8 @@ static void term_process_key(Term *term, emacs_env *env, unsigned char *key,
     vterm_keyboard_end_paste(term->vt);
   } else if (is_key(key, len, "<return>")) {
     vterm_keyboard_key(term->vt, VTERM_KEY_ENTER, modifier);
+  } else if (is_key(key, len, "m") && modifier == VTERM_MOD_CTRL) {
+    vterm_keyboard_key(term->vt, VTERM_KEY_ENTER, VTERM_MOD_NONE);
   } else if (is_key(key, len, "<tab>")) {
     vterm_keyboard_key(term->vt, VTERM_KEY_TAB, modifier);
   } else if (is_key(key, len, "<backtab>") ||
