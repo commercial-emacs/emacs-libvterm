@@ -490,6 +490,7 @@ Only background is used."
     (define-key map (kbd "C-c C-y") #'vterm--copy-mode-done-then)
     (define-key map [remap self-insert-command] 'vterm--copy-mode-done-then)
     (define-key map [return] #'vterm-copy-mode-done)
+    (define-key map (kbd "C-m") #'vterm-copy-mode-done)
     (define-key map (kbd "C-c C-r") #'vterm-reset-cursor-point)
     (define-key map (kbd "C-c C-n") #'vterm-next-prompt)
     (define-key map (kbd "C-c C-p") #'vterm-previous-prompt)

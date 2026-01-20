@@ -803,7 +803,8 @@ static void term_process_key(Term *term, emacs_env *env, unsigned char *key,
   } else if (is_key(key, len, "<backtab>") ||
              is_key(key, len, "<iso-lefttab>")) {
     vterm_keyboard_key(term->vt, VTERM_KEY_TAB, VTERM_MOD_SHIFT);
-  } else if (is_key(key, len, "<backspace>")) {
+  } else if (is_key(key, len, "<backspace>") ||
+	     is_key(key, len, "DEL")) {
     vterm_keyboard_key(term->vt, VTERM_KEY_BACKSPACE, modifier);
   } else if (is_key(key, len, "<escape>")) {
     vterm_keyboard_key(term->vt, VTERM_KEY_ESCAPE, modifier);
