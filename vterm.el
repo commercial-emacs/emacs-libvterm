@@ -40,7 +40,7 @@
          (signal (car err) (cdr err))))
 
 ;; a maintenance gotcha with vterm-module.c term_process_key
-(defconst vterm--keys '(tab backtab iso-lefttab backspace escape
+(defconst vterm--keys '(return tab backtab iso-lefttab backspace escape
                         up down left right
                         insert delete home end prior next
                         f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
@@ -471,10 +471,6 @@ Only background is used."
     (dolist (ret '(M-return S-return C-return))
       (define-key map (vector ret) #'vterm--self-insert))
 
-    ;; Plain return
-    (define-key map [return] #'vterm-send-return)
-    (define-key map (kbd "RET") #'vterm-send-return)
-
     ;; vterm.el bespoke bindings
     (define-key map (kbd "C-c C-c") #'vterm--self-insert)
     (define-key map (kbd "C-c C-/") #'vterm--self-insert)
@@ -762,13 +758,6 @@ running in the terminal (like Emacs or Nano)."
   "Output from the system is stopped when the system receives STOP."
   (interactive)
   (vterm-send-key "<stop>"))
-
-(defun vterm-send-return ()
-  "Send C-m to libvterm."
-  (interactive)
-  (deactivate-mark)
-  (when vterm--term
-    (process-send-string vterm--process "\C-m")))
 
 (defun vterm-clear-scrollback ()
   "Send <clear-scrollback> to libvterm."
