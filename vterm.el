@@ -247,7 +247,7 @@ That globalized minor mode interferes with our control over blink."
   :type 'boolean
   :group 'vterm)
 
-(defun vterm--set-copy-trim (symbol value)
+(defun vterm--set-copy-command (symbol value)
   (set-default symbol value)
   (when (boundp 'vterm-copy-mode-map)
     (dolist (key (where-is-internal #'kill-ring-save))
@@ -257,7 +257,7 @@ That globalized minor mode interferes with our control over blink."
 (defcustom vterm-copy-trim nil
   "Convert screenwidth-spanning whitespace to simple newline."
   :type 'boolean
-  :set #'vterm--set-copy-trim
+  :set #'vterm--set-copy-command
   :group 'vterm)
 
 (make-obsolete 'vterm-use-vterm-prompt-detection-method nil "0.0.4")
@@ -510,9 +510,10 @@ Only background is used."
 		       while (< opoint end)
 		       do (goto-char (min end (line-end-position) (+ opoint width)))
 		       collect (buffer-substring-no-properties
-				opoint (save-excursion
-					 (skip-chars-backward " \t")
-					 (point)))
+				opoint (max (save-excursion
+					      (skip-chars-backward " \t")
+					      (point))
+                                            opoint))
 		       when (= (point) (line-end-position))
 		       do (forward-char)))
 	    "\n"))))
