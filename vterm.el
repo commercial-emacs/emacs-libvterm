@@ -247,6 +247,19 @@ That globalized minor mode interferes with our control over blink."
   :type 'boolean
   :group 'vterm)
 
+(defun vterm--set-copy-trim (symbol value)
+  (set-default symbol value)
+  (when (boundp 'vterm-copy-mode-map)
+    (dolist (key (where-is-internal #'kill-ring-save))
+      (define-key vterm-copy-mode-map key
+        (and value #'vterm-trimming-kill-ring-save)))))
+
+(defcustom vterm-copy-trim nil
+  "Convert screenwidth-spanning whitespace to simple newline."
+  :type 'boolean
+  :set #'vterm--set-copy-trim
+  :group 'vterm)
+
 (make-obsolete 'vterm-use-vterm-prompt-detection-method nil "0.0.4")
 (make-obsolete 'vterm-bookmark-check-dir nil "0.0.4")
 (defvar-local vterm--exit-copy-mode-function nil)
@@ -484,6 +497,27 @@ Only background is used."
     (define-key map (kbd "C-c M-y") #'vterm-yank-pop)
     map))
 
+(defun vterm-trimming-kill-ring-save (beg end &optional region)
+  "Convert screenwidth-spanning whitespace to simple newline."
+  (interactive (list (mark) (point) 'region))
+  (let ((region-extract-function
+	 (lambda (&rest _args)
+	   (string-join
+	    (save-excursion
+	      (goto-char beg)
+	      (cl-loop with width = (window-width)
+		       for opoint = (point)
+		       while (< opoint end)
+		       do (goto-char (min end (line-end-position) (+ opoint width)))
+		       collect (buffer-substring-no-properties
+				opoint (save-excursion
+					 (skip-chars-backward " \t")
+					 (point)))
+		       when (= (point) (line-end-position))
+		       do (forward-char)))
+	    "\n"))))
+    (kill-ring-save beg end region)))
+
 (defvar vterm-copy-mode-map
   (let ((map (make-keymap)))
     (define-key map (kbd "C-c C-t") #'vterm-copy-mode)
@@ -494,6 +528,9 @@ Only background is used."
     (define-key map (kbd "C-c C-r") #'vterm-reset-cursor-point)
     (define-key map (kbd "C-c C-n") #'vterm-next-prompt)
     (define-key map (kbd "C-c C-p") #'vterm-previous-prompt)
+    (when vterm-copy-trim
+      (dolist (key (where-is-internal #'kill-ring-save))
+        (define-key map key #'vterm-trimming-kill-ring-save)))
     map))
 
 (define-derived-mode vterm-mode nil "VTerm"

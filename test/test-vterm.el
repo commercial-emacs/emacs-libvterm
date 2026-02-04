@@ -111,6 +111,33 @@
 	(should (equal x3 (buffer-substring-no-properties
 			   (line-beginning-position) (line-end-position))))))))
 
+(ert-deftest claude-code-unwrapped ()
+  "Exercise vterm-trimming-kill-ring-save."
+  (unwind-protect
+      (progn
+        (customize-set-variable 'vterm-copy-trim t)
+        (test-vterm/with-session
+         (should (= (window-width) vterm-min-window-width))
+	 ;; A Claude Code style single big-ass logical line spanning
+	 ;; three screen lines should get copied as three logical
+	 ;; lines.
+         (let* ((w (window-width))
+                (s1 (make-string (1- w) ?a))
+                (s2 (make-string (1- w) ?b))
+                (s3 (make-string (1- w) ?c))
+                (line (concat s1 " " s2 " " s3))
+                (key (car (where-is-internal #'kill-ring-save))))
+           (test-vterm/run (format "echo \"%s\"" line))
+           (call-interactively #'vterm-copy-mode)
+           (forward-line -1) ;logical line (should be at a's)
+           (set-mark (point))
+           (forward-line 1)
+           (execute-kbd-macro key)
+           (should (equal (current-kill 0 t)
+                          (string-join (list s1 s2 s3) "\n"))))))
+    (setq kill-ring nil)
+    (customize-set-variable 'vterm-copy-trim nil)))
+
 (ert-deftest yank-pop ()
   (test-vterm/with-session
     (should (zerop (length kill-ring)))
