@@ -25,23 +25,8 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Build type (default RelWithDebInfo)" FORCE)
 endif()
 
-# try to find the vterm.h header file.
-find_path(LIBVTERM_INCLUDE_DIR NAMES
-  vterm.h
-  )
-
-if(NOT LIBVTERM_INCLUDE_DIR)
-  message(FATAL_ERROR "libvterm header not found")
-endif()
-
-find_library(LIBVTERM_LIBRARY NAMES
-  vterm
-  libvterm
-  )
-
-if(NOT LIBVTERM_LIBRARY)
-  message(FATAL_ERROR "libvterm not found")
-endif()
+set(LIBVTERM_INCLUDE_DIR /home/dick/libvterm-mirror/include)
+set(LIBVTERM_LIBRARY /home/dick/libvterm-mirror/.libs/libvterm.a)
 
 message(STATUS "System libvterm detected")
 execute_process(COMMAND grep -c "VTermStringFragment" "${LIBVTERM_INCLUDE_DIR}/vterm.h" OUTPUT_VARIABLE VTermStringFragmentExists)
