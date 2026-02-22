@@ -27,7 +27,7 @@ jobs:
       if: startsWith(runner.os, 'Linux')
       run: |
         sudo apt-get -yq update
-        DEBIAN_FRONTEND=noninteractive sudo apt-get -yq install libxml2-dev libgccjit-11-dev libvterm-dev emacs
+        DEBIAN_FRONTEND=noninteractive sudo apt-get -yq install libxml2-dev libgccjit-11-dev libvterm-dev emacs libtool
 
     - name: brew-haha
       if: startsWith(runner.os, 'macOS')
