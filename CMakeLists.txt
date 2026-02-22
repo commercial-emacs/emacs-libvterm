@@ -25,9 +25,9 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Build type (default RelWithDebInfo)" FORCE)
 endif()
 
-find_program(LIBTOOL NAMES libtool glibtool)
+find_program(LIBTOOL NAMES glibtool)
 if(NOT LIBTOOL)
-  message(FATAL_ERROR "libtool not found. Please install libtool")
+  message(FATAL_ERROR "glibtool not found. Please install glibtool")
 endif()
 
 ExternalProject_add(libvterm

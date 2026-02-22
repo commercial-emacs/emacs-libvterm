@@ -32,7 +32,7 @@ jobs:
     - name: brew-haha
       if: startsWith(runner.os, 'macOS')
       run: |
-        brew install emacs libvterm libgccjit libxml2
+        brew install emacs libvterm libgccjit libxml2 libtool
 
     - name: test
       run: |
