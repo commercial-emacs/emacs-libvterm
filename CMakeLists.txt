@@ -34,7 +34,7 @@ ExternalProject_add(libvterm
   GIT_REPOSITORY https://github.com/dickmao/libvterm-mirror.git
   GIT_TAG 89a81c9
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${LIBVTERM_BUILD_COMMAND} "CFLAGS='-fPIC'" "LDFLAGS='-static'"
+  BUILD_COMMAND ${LIBVTERM_BUILD_COMMAND} "CFLAGS=-fPIC" "LDFLAGS=-static" "LIBTOOL=${LIBTOOL}"
   BUILD_IN_SOURCE ON
   INSTALL_COMMAND "")
 
