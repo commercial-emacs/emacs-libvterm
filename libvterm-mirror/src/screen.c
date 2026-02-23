@@ -58,7 +58,6 @@ struct VTermScreen
   int cols;
 
   unsigned int global_reverse : 1;
-  unsigned int reflow : 1;
 
   /* Primary and Altscreen. buffers[1] is lazily allocated as needed */
   ScreenCell *buffers[2];
@@ -501,8 +500,6 @@ static int line_popcount(ScreenCell *buffer, int row, int rows, int cols)
   return col + 1;
 }
 
-#define REFLOW (screen->reflow)
-
 static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
 			  int ncols, bool active, VTermStateFields *statefields)
 {
@@ -514,58 +511,46 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
   ScreenCell *buffer = vterm_allocator_malloc(screen->vt, sizeof(ScreenCell) * nrows * ncols);
   VTermLineInfo *lineinfo = vterm_allocator_malloc(screen->vt, sizeof(lineinfo[0]) * nrows);
 
-  int o_irow = o_nrows - 1;
-  int irow = nrows - 1;
-
-  VTermPos o_cursor = statefields->pos;
-  VTermPos cursor = { -1, -1 };
+  int o_irow = o_nrows - 1, irow = nrows - 1;
+  VTermPos o_cursor = statefields->pos, cursor = { -1, -1 };
 
 #ifdef DEBUG_REFLOW
   fprintf(stderr, "Resizing from %dx%d to %dx%d; cursor was at (%d,%d)\n",
       o_ncols, o_nrows, ncols, nrows, o_cursor.col, o_cursor.row);
 #endif
 
-  // Reconnoiter at the final blank row to know how
-  // much spare space can accommodate reflow.
-  int final_blank_row = nrows;
-
+  int first_empty_irow = nrows;
   while(o_irow >= 0) {
-    int last_row = o_irow;
-    /* TODO: Stop if dwl or dhl */
-    while(REFLOW && o_lineinfo && o_irow >= 0 && o_lineinfo[o_irow].continuation)
-      o_irow--;
     int o_logic_first = o_irow;
+    int o_nchars = line_popcount(o_buffer, o_irow, o_nrows, o_ncols);
 
-    int o_nchars = 0;
-    for(int row = o_logic_first; row <= last_row; row++) {
-      if(REFLOW && row < (o_nrows - 1) && o_lineinfo[row + 1].continuation)
-        o_nchars += o_ncols;
-      else
-        o_nchars += line_popcount(o_buffer, row, o_nrows, o_ncols);
+    /* TODO: Stop if dwl or dhl */
+    while(o_logic_first >= 0 && o_lineinfo[o_logic_first].continuation) {
+      --o_logic_first;
+      o_nchars += o_ncols;
     }
 
-    if(final_blank_row == (irow + 1) && o_nchars == 0)
-      final_blank_row = irow;
+    if(first_empty_irow == (irow + 1) && o_nchars == 0)
+      first_empty_irow = irow;
 
     int nscrnlines = 1;
-    if (REFLOW && o_nchars)
+    if (o_nchars)
       nscrnlines = (o_nchars + ncols - 1) / ncols;
 
     int logic_last = irow;
-    int logic_first = irow - nscrnlines + 1;
+    int logic_first = logic_last - nscrnlines + 1;
 
-    o_irow = o_logic_first;
     int o_icol = 0;
-
-    int spare_rows = nrows - final_blank_row;
+    int spare_rows = nrows - first_empty_irow;
 
     if(logic_first < 0 && /* we'd fall off the top */
-        spare_rows >= 0 && /* we actually have spare rows */
-        (!active || cursor.row == -1 || (cursor.row - logic_first) < nrows))
+       spare_rows >= 0 && /* we actually have spare rows */
+       (!active ||
+	cursor.row == -1 ||
+	/* and scrolling wouldn't cause cursor to fall off */
+	(cursor.row - logic_first) < nrows))
     {
-      /* Attempt to scroll content down into the blank rows at the bottom to
-       * make it fit
-       */
+      /* Fit content into spare rows.  */
       int downwards = -logic_first;
       if(downwards > spare_rows)
         downwards = spare_rows;
@@ -585,24 +570,25 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
       if(cursor.row >= 0)
         cursor.row += downwards;
 
-      final_blank_row += downwards;
+      first_empty_irow += downwards;
     }
 
 #ifdef DEBUG_REFLOW
     fprintf(stderr, "  rows [%d..%d] <- [%d..%d] o_nchars=%d\n",
-	    logic_first, logic_last, o_logic_first, last_row, o_nchars);
+	    logic_first, logic_last, o_logic_first, o_irow, o_nchars);
 #endif
 
     if(logic_first < 0) {
-      if(o_logic_first <= o_cursor.row && o_cursor.row < last_row) {
+      if(o_logic_first <= o_cursor.row && o_cursor.row < o_irow) {
         cursor.row = 0;
         cursor.col = o_cursor.col;
       }
       break; /* scrolled off the top */
     }
 
-    o_irow = o_logic_first;
-    for(irow = logic_first; irow <= logic_last; ++irow) {
+    for(int o_irow = o_logic_first, irow = logic_first;
+	irow <= logic_last;
+	++irow) {
       int icol = 0;
       for (; icol < MIN(o_nchars, ncols); ++icol) {
         buffer[irow * ncols + icol] = o_buffer[o_irow * o_ncols + o_icol];
@@ -612,10 +598,6 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
 
         if(++o_icol >= o_ncols) {
           o_irow++;
-          if(!REFLOW) {
-            icol++;
-            break;
-          }
           o_icol = 0;
         }
       }
@@ -648,7 +630,7 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
   cursor.col = MIN(ncols-1, cursor.col);
 
   if(active && (cursor.row == -1 || cursor.col == -1)) {
-    cursor.row = final_blank_row - 1;
+    cursor.row = first_empty_irow - 1;
     cursor.col = 0;
   }
 
@@ -726,11 +708,6 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
 
   if(active)
     statefields->pos = cursor;
-
-#ifdef DEBUG_REFLOW
-  fprintf(stderr, "Resizing done; cursor was at (%d,%d)\n",
-	  cursor.col, cursor.row);
-#endif
 
   return;
 }
@@ -864,7 +841,6 @@ static VTermScreen *screen_new(VTerm *vt)
   screen->cols = cols;
 
   screen->global_reverse = false;
-  screen->reflow = false;
 
   screen->callbacks = NULL;
   screen->cbdata    = NULL;
@@ -1019,17 +995,6 @@ VTermScreen *vterm_obtain_screen(VTerm *vt)
   vt->screen = screen;
 
   return screen;
-}
-
-void vterm_screen_enable_reflow(VTermScreen *screen, bool reflow)
-{
-  screen->reflow = reflow;
-}
-
-#undef vterm_screen_set_reflow
-void vterm_screen_set_reflow(VTermScreen *screen, bool reflow)
-{
-  vterm_screen_enable_reflow(screen, reflow);
 }
 
 void vterm_screen_enable_altscreen(VTermScreen *screen, int altscreen)
