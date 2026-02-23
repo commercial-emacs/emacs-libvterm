@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 EMACS ?= emacs
-CSRC := $(shell git ls-files *.[ch])
+CSRC := $(shell git ls-files '*.[ch]')
 ELSRC := $(shell git ls-files *.el)
 TESTSRC := $(shell git ls-files test/*.el)
 BEAR := $(shell command -v bear 2>/dev/null)
