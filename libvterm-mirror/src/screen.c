@@ -627,11 +627,6 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
 
   cursor.col = MIN(ncols-1, cursor.col);
 
-  if(active && (cursor.row == -1 || cursor.col == -1)) {
-    cursor.row = first_empty_irow - 1;
-    cursor.col = 0;
-  }
-
   if(o_irow >= 0 && bufidx == BUFIDX_PRIMARY) {
     /* Push spare lines to scrollback buffer */
     if(screen->callbacks && screen->callbacks->sb_pushline)
