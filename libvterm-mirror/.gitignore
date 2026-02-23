@@ -1,0 +1,6 @@
+.libs
+*.o
+*.lo
+bin
+*.la
+src/encoding

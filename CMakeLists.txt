@@ -38,8 +38,7 @@ else()
 endif()
 
 ExternalProject_add(libvterm
-  GIT_REPOSITORY https://github.com/dickmao/libvterm-mirror.git
-  GIT_TAG 1364726
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libvterm-mirror
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ${LIBVTERM_BUILD_COMMAND} "CFLAGS=-fPIC" "LDFLAGS=-static" "LIBTOOL=${LIBTOOL}"
   BUILD_IN_SOURCE ON
