@@ -3,4 +3,3 @@
 *.lo
 bin
 *.la
-src/encoding
