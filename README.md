@@ -21,6 +21,4 @@ C-p immediately enters VTermCopy mode.
 M-v immediately enters VTermCopy mode.
 
 Sane handling of wrapped lines.  IFYKYK.
-
-Reflows text both for current screen and scrollback.
 </pre>
