@@ -3,7 +3,7 @@ INIT
 # nowhere near as noisy
 RESIZE 5,10
 WANTSTATE
-WANTSCREEN r
+WANTSCREEN
 RESET
 
 !Resize wider reflows wide lines

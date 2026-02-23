@@ -613,11 +613,10 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
     }
 
     o_irow = o_logic_first - 1;
-    if (cursor.row < 0) { // miss me with tomatoes
-      if(o_cursor.row > o_irow) {
-	cursor.row = logic_last;
-	cursor.col = MIN(ncols-1, o_cursor.col);
-      }
+    if (cursor.row < 0 && o_cursor.row > o_irow) {
+      int linear = (o_cursor.row - o_logic_first) * o_ncols + o_cursor.col;
+      cursor.row = logic_first + linear / ncols;
+      cursor.col = linear % ncols;
     }
     irow = logic_first - 1;
   }
