@@ -30,7 +30,7 @@ vterm-module$(SOEXT): $(CSRC) CMakeLists.txt
 	$(BEAR) cmake --build build --clean-first --config Release -j8
 
 .PHONY: test
-test: compile
+test: libvterm-test compile
 	$(EMACS) --batch -L . -L test $(patsubst %.el,-l %,$(notdir $(TESTSRC))) -f ert-run-tests-batch
 
 .PHONY: libvterm-test libvterm-clean

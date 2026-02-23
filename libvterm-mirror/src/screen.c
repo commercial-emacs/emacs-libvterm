@@ -540,7 +540,6 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
     int logic_last = irow;
     int logic_first = logic_last - nscrnlines + 1;
 
-    int o_icol = 0;
     int spare_rows = nrows - first_empty_irow;
 
     if(logic_first < 0 && /* we'd fall off the top */
@@ -586,7 +585,7 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
       break; /* scrolled off the top */
     }
 
-    for(int o_irow = o_logic_first, irow = logic_first;
+    for(int o_irow = o_logic_first, o_icol = 0, irow = logic_first;
 	irow <= logic_last;
 	++irow) {
       int icol = 0;
