@@ -647,9 +647,7 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
 
   cursor.col = MIN(ncols-1, cursor.col);
 
-  /* We really expect the cursor position to be set by now */
   if(active && (cursor.row == -1 || cursor.col == -1)) {
-    fprintf(stderr, "screeresize failed to update cursor position\n");
     cursor.row = final_blank_row - 1;
     cursor.col = 0;
   }
