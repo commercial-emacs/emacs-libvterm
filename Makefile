@@ -33,6 +33,13 @@ vterm-module$(SOEXT): $(CSRC) CMakeLists.txt
 test: compile
 	$(EMACS) --batch -L . -L test $(patsubst %.el,-l %,$(notdir $(TESTSRC))) -f ert-run-tests-batch
 
+.PHONY: libvterm-test libvterm-clean
+libvterm-test:
+	$(MAKE) -C libvterm-mirror test
+
+libvterm-clean:
+	$(MAKE) -C libvterm-mirror clean
+
 .PHONY: dist-clean
 dist-clean:
 	( \
