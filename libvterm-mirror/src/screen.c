@@ -635,8 +635,10 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int nrows,
     if(active)
       statefields->pos.row -= (o_irow + 1);
   }
-  if(irow >= 0 && bufidx == BUFIDX_PRIMARY &&
-     screen->callbacks && screen->callbacks->sb_popline) {
+  if(irow >= 0 &&
+     bufidx == BUFIDX_PRIMARY &&
+     screen->callbacks &&
+     screen->callbacks->sb_popline) {
     /* Restore lines from scrollback buffer on a widening resize. */
     while(irow >= 0) {
       if(!(screen->callbacks->sb_popline(o_ncols, screen->sb_buffer, screen->cbdata)))

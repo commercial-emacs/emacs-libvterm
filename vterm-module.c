@@ -66,26 +66,25 @@ static int term_sb_push(int cols, const VTermScreenCell *cells, void *data) {
   if (sbrow->info != NULL) {
     free_lineinfo(sbrow->info);
   }
+
+  // term lines ordered top to bottom.  save scrolled off top, then
+  // shift last len-1 leftward (translates to upward).
+  assert(term->lines_len > 0);
   sbrow->info = term->lines[0];
   memmove(term->lines, term->lines + 1,
           sizeof(term->lines[0]) * (term->lines_len - 1));
+  LineInfo *last = term->lines[term->lines_len - 1];
+  term->lines[term->lines_len - 1] = NULL;
   if (term->resizing) {
     /* pushed by window height decr */
-    if (term->lines[term->lines_len - 1] != NULL) {
-      /* do not need free here ,it is reused ,we just need set null */
-      term->lines[term->lines_len - 1] = NULL;
+    term->lines_len = MAX(1, term->lines_len - 1);
+  } else if (last) {
+    LineInfo *replace = alloc_lineinfo();
+    if (last->directory != NULL) {
+      replace->directory = malloc(1 + strlen(last->directory));
+      strcpy(replace->directory, last->directory);
     }
-    term->lines_len--;
-  } else {
-    LineInfo *lastline = term->lines[term->lines_len - 1];
-    if (lastline != NULL) {
-      LineInfo *line = alloc_lineinfo();
-      if (lastline->directory != NULL) {
-        line->directory = malloc(1 + strlen(lastline->directory));
-        strcpy(line->directory, lastline->directory);
-      }
-      term->lines[term->lines_len - 1] = line;
-    }
+    term->lines[term->lines_len - 1] = replace;
   }
 
   // New row is added at the start of the storage buffer.
