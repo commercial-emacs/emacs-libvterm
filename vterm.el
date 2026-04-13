@@ -416,6 +416,8 @@ Only background is used."
                    (beginning-of-buffer . vterm--copy-mode-then)
                    (end-of-buffer . vterm--copy-mode-then)
                    (previous-line . vterm--copy-mode-then)
+                   (backward-page . ghostty-vt--copy-mode-then)
+                   (forward-page . ghostty-vt--copy-mode-then)
                    (next-line . vterm--copy-mode-then)))
          (remap-keys
           (mapcar (lambda (pair)

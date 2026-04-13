@@ -31,7 +31,7 @@ vterm-module$(SOEXT): $(CSRC) CMakeLists.txt
 
 .PHONY: test
 test: libvterm-test
-	$(EMACS) --batch -L . -L test $(patsubst %.el,-l %,$(notdir $(TESTSRC))) -f ert-run-tests-batch
+	$(EMACS) --batch -L . -L test $(patsubst %.el,-l %,$(notdir $(TESTSRC))) -f ert-run-tests-batch-and-exit
 
 .PHONY: libvterm-test libvterm-clean
 libvterm-test: compile
