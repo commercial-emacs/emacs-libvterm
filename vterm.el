@@ -540,7 +540,7 @@ Only background is used."
   "Major mode for vterm buffer."
   (buffer-disable-undo)
   (hack-dir-local-variables)
-  (when-let ((vterm-env (assq 'vterm-environment dir-local-variables-alist)))
+  (when-let* ((vterm-env (assq 'vterm-environment dir-local-variables-alist)))
     (setq-local vterm-environment (cdr vterm-env)))
   (let ((process-environment
          (append vterm-environment
@@ -743,14 +743,14 @@ typically used to copy text from vterm buffers."
   (interactive)
   (let ((keys (key-description (this-command-keys))))
     (call-interactively #'vterm-copy-mode)
-    (when-let ((command (keymap-lookup global-map keys)))
+    (when-let* ((command (keymap-lookup global-map keys)))
       (call-interactively command))))
 
 (defun vterm--copy-mode-done-then ()
   (interactive)
   (let ((keys (key-description (this-command-keys))))
     (call-interactively #'vterm-copy-mode-done)
-    (when-let ((command (keymap-lookup vterm-mode-map keys)))
+    (when-let* ((command (keymap-lookup vterm-mode-map keys)))
       (call-interactively command))))
 
 (defun vterm--self-insert ()
@@ -977,11 +977,11 @@ looks like: ((\"m\" :shift ))"
           (setq ev-keys (funcall input-method-function raw-key))
           (when (listp ev-keys)
             (dolist (k ev-keys)
-              (when-let ((key (key-description (vector k))))
+              (when-let* ((key (key-description (vector k))))
                 (when (and (not (symbolp event)) shift (not meta) (not ctrl))
                   (setq key (upcase key)))
                 (setq keys (append keys (list (list key shift meta ctrl))))))))
-      (when-let ((key (key-description (vector raw-key))))
+      (when-let* ((key (key-description (vector raw-key))))
         (when (and (not (symbolp event)) shift (not meta) (not ctrl))
           (setq key (upcase key)))
         (setq keys (list (list key shift meta ctrl)))))
@@ -1139,7 +1139,7 @@ Then triggers a redraw from the module."
   (format "%s" win))
 
 (defun vterm--window-start (win)
-  (when-let ((start (alist-get win vterm--window-starts)))
+  (when-let* ((start (alist-get win vterm--window-starts)))
     (if (< start (point-max))
         start
       (prog1 nil
@@ -1236,10 +1236,10 @@ Return true on success."
 
 (defun vterm--get-pwd (&optional linenum)
   "Get working directory at LINENUM."
-  (when-let ((term-p vterm--term)
-             (raw-pwd (vterm--get-pwd-raw
-                       vterm--term
-                       (or linenum (line-number-at-pos)))))
+  (when-let* ((term-p vterm--term)
+              (raw-pwd (vterm--get-pwd-raw
+                        vterm--term
+                        (or linenum (line-number-at-pos)))))
     (vterm--get-directory raw-pwd)))
 
 (defun vterm--get-color (index &rest args)
@@ -1294,13 +1294,13 @@ the called functions."
             (end-of-line (if (zerop i) 0 1))
             (let* ((pos (point))
                    (prev (get-text-property pos 'vterm-prompt)))
-              (when-let ((end
-                          (catch 'done
-                            (prog1 nil
-                              (while (setq pos (next-single-property-change
-                                                pos 'vterm-prompt))
-                                (when prev (throw 'done pos))
-                                (setq prev (get-text-property pos 'vterm-prompt)))))))
+              (when-let* ((end
+                           (catch 'done
+                             (prog1 nil
+                               (while (setq pos (next-single-property-change
+                                                 pos 'vterm-prompt))
+                                 (when prev (throw 'done pos))
+                                 (setq prev (get-text-property pos 'vterm-prompt)))))))
                 (goto-char end)))))
       (term-next-prompt n))))
 
@@ -1314,26 +1314,26 @@ the called functions."
         (dotimes (_i n)
           (end-of-line 0)
           (unless (get-text-property (point) 'vterm-prompt) ;would be odd
-            (when-let ((pos (previous-single-property-change (point) 'vterm-prompt)))
+            (when-let* ((pos (previous-single-property-change (point) 'vterm-prompt)))
               (goto-char pos))))
       (term-previous-prompt n))))
 
 (defun vterm-skip-prompt ()
   (if (vterm-prompt-column-p)
-      (when-let ((end (if (get-text-property (point) 'vterm-prompt)
-                          (next-single-property-change (point) 'vterm-prompt)
-                        (if (get-text-property (max (point-min) (1- (point)))
-                                               'vterm-prompt)
-                            (point) ; p-s-p-c returns pos strictly less than point
-                          (previous-single-property-change (point) 'vterm-prompt)))))
+      (when-let* ((end (if (get-text-property (point) 'vterm-prompt)
+                           (next-single-property-change (point) 'vterm-prompt)
+                         (if (get-text-property (max (point-min) (1- (point)))
+                                                'vterm-prompt)
+                             (point) ; p-s-p-c returns pos strictly less than point
+                           (previous-single-property-change (point) 'vterm-prompt)))))
         (goto-char end))
     (term-skip-prompt)))
 
 (defun vterm-cursor-in-command-buffer-p (&optional pt)
   "Check whether cursor in command buffer area."
   (save-excursion
-    (when-let ((current (vterm-reset-cursor-point))
-               (end (save-excursion (vterm-skip-prompt))))
+    (when-let* ((current (vterm-reset-cursor-point))
+                (end (save-excursion (vterm-skip-prompt))))
       (>= (or pt current) end))))
 
 (defun vterm-reset-cursor-point ()

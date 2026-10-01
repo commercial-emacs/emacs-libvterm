@@ -8,3 +8,5 @@ CLAUDE.md
 AGENT.md
 !/.claude
 libvterm-mirror/t/harness
+/epkg/
+/epkg.mk

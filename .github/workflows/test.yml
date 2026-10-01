@@ -32,9 +32,17 @@ jobs:
     - name: brew-haha
       if: startsWith(runner.os, 'macOS')
       run: |
-        brew install emacs libvterm libgccjit libxml2 libtool
+        brew install emacs libvterm libgccjit libxml2 libtool make
+
+    - uses: actions/checkout@v4
+      with:
+        repository: dickmao/epkg
+        path: epkg
+
+    - name: epkg
+      run: make -C epkg install
 
     - name: test
       run: |
-        make test
-        make install
+        ${{ startsWith(runner.os, 'macOS') && 'gmake' || 'make' }} test
+        ${{ startsWith(runner.os, 'macOS') && 'gmake' || 'make' }} install
