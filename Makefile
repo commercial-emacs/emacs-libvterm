@@ -43,11 +43,5 @@ libvterm-test: compile
 libvterm-clean:
 	$(MAKE) -C libvterm-mirror clean
 
-.PHONY: dist-clean
-dist-clean: epkg-dist-clean
-
-.PHONY: dist
-dist: vterm-module$(SOEXT) epkg-dist
-
 .PHONY: install
-install: epkg-install
+install: vterm-module$(SOEXT) epkg-install
