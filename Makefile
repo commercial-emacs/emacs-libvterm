@@ -24,6 +24,8 @@ EPKG_EL := $(ELSRC) $(TESTSRC)
 EPKG_MAIN := vterm.el
 EPKG_TEST_EL := $(TESTSRC)
 
+.DEFAULT_GOAL := compile
+
 .PHONY: compile
 compile: vterm-module$(SOEXT) epkg-compile
 
@@ -45,7 +47,7 @@ libvterm-clean:
 dist-clean: epkg-dist-clean
 
 .PHONY: dist
-dist: vterm-module$(SOEXT) epkg-dst
+dist: vterm-module$(SOEXT) epkg-dist
 
 .PHONY: install
 install: epkg-install
