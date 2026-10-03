@@ -19,8 +19,8 @@ else
 	SOEXT := .so
 endif
 
-EPKG_FILES := vterm-module$(SOEXT) $(ELSRC)
-EPKG_EL := $(ELSRC) $(TESTSRC)
+EPKG_EL := $(ELSRC)
+EPKG_FILES := vterm-module$(SOEXT) $(EPKG_EL)
 EPKG_MAIN := vterm.el
 EPKG_TEST_EL := $(TESTSRC)
 
